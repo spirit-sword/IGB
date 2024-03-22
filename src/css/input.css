@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+    .text-stroke-1 {
+        -webkit-text-stroke-width: 1px;
+        /* Adjust the width as needed */
+        -webkit-text-stroke-color: white;
+        /* Adjust the color as needed */
+    }
+
+    .text-stroke-2 {
+        -webkit-text-stroke-width: 2px;
+        /* Adjust the width as needed */
+        -webkit-text-stroke-color: white;
+        /* Adjust the color as needed */
+    }
+
+    .text-stroke-3 {
+        -webkit-text-stroke-width: 3px;
+        /* Adjust the width as needed */
+        -webkit-text-stroke-color: white;
+        /* Adjust the color as needed */
+    }
+
+    .stretched-text {
+        font-stretch: ultra-expanded;
+    }
+
+    .font-hilliamoon {
+        font-family: "Hilliamoon", sans-serif;
+        font-weight: 400;
+        font-style: normal;
+    }
+
+    .custom-skew-right {
+        transform: skewX(-25deg);
+    }
+
+    .first-letter-uppercase{
+        text-transform: capitalize;
+    }
+
+}
