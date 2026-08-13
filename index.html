@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa de Evangelização</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  html,body{margin:0;height:100%;font-family:sans-serif}
+  #map{height:100%;cursor:default}
+  #map.mode-igreja{cursor:crosshair}
+  #map.mode-zona{cursor:crosshair}
+  #map.mode-area{cursor:crosshair}
+  #panel{position:absolute;top:10px;right:10px;background:#fff;padding:10px;z-index:1000;max-width:290px;max-height:96vh;overflow-y:auto;box-shadow:0 0 6px #0003;font-size:13px}
+  #panel h3{margin:8px 0 4px}
+  #panel select,#panel input,#panel button,#panel textarea{width:100%;margin:2px 0;box-sizing:border-box}
+  #panel button.danger{background:#fde2e2;border-color:#e74c3c}
+  #panel button.active{background:#d6e9ff;border-color:#3388ff}
+  #panel button:disabled{opacity:.5;cursor:not-allowed}
+  .row2{display:flex;gap:4px}
+  .row2 button{flex:1}
+  #members div.member-row{display:flex;justify-content:space-between;align-items:center;gap:4px}
+  #members button{width:auto;padding:0 6px}
+  #members{max-height:140px;overflow:auto;font-size:12px}
+  #legend{position:absolute;bottom:10px;left:10px;background:#fff;padding:8px 10px;z-index:1000;font-size:12px;box-shadow:0 0 6px #0003}
+  #legend span{display:inline-block;width:12px;height:12px;margin-right:4px;vertical-align:middle;border-radius:2px}
+  #hintBar{position:absolute;top:10px;left:10px;background:#222;color:#fff;padding:6px 10px;z-index:1000;font-size:12px;border-radius:4px;display:none;max-width:60%}
+  #editControls{position:absolute;top:56px;left:10px;z-index:1000;display:none}
+  #toast{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:20px;z-index:2100;font-size:12px;display:none}
+  small.hint{color:#777}
+  hr{margin:10px 0}
+  .church-pin{width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+    display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px #0006}
+  .church-pin svg{transform:rotate(45deg)}
+  .zone-ctrl-btn{background:#fff;border:2px solid #333;border-radius:50%;width:26px;height:26px;
+    display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;box-shadow:0 1px 3px #0006}
+  .soul-icon{font-size:16px;line-height:1}
+  .house-icon{font-size:16px;line-height:1}
+  .modal-overlay{position:fixed;inset:0;background:#0007;z-index:3000;display:none;align-items:center;justify-content:center}
+  .modal-box{background:#fff;padding:16px;border-radius:8px;min-width:270px;max-width:92vw;max-height:90vh;overflow:auto;font-size:13px}
+  .modal-box h3{margin-top:0}
+  .modal-box input,.modal-box select,.modal-box button{width:100%;box-sizing:border-box;margin:4px 0}
+  .modal-box input[type=checkbox]{width:auto}
+  .modal-actions{display:flex;gap:6px;margin-top:10px}
+  .modal-actions button{width:auto;flex:1}
+  code.hashfull{word-break:break-all;font-size:11px}
+  @media (max-width:700px){
+    #panel{top:auto;bottom:0;left:0;right:0;width:100%;max-width:none;max-height:45vh}
+    #legend{bottom:calc(45vh + 10px)}
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="hintBar"></div>
+<div id="editControls"><button id="finishEditBtn">Concluir edição de vértices</button></div>
+<div id="toast"></div>
+
+<div id="legend">
+  <div><span style="background:#e74c3c"></span>Não iniciado</div>
+  <div><span style="background:#f1c40f"></span>Em andamento</div>
+  <div><span style="background:#2ecc71"></span>Concluído</div>
+  <div>🔥 alma vinculada &nbsp; 💬 casa visitada</div>
+</div>
+
+<div id="panel">
+  <h3>Gestor</h3>
+  <button id="addIgrejaBtn">+ Igreja (clique no mapa)</button>
+  <select id="igrejaSelect"><option value="">-- ir para igreja --</option></select>
+  <small class="hint" id="noIgrejaHint" style="display:none">Cadastre uma igreja primeiro.</small>
+
+  <h3>Zona</h3>
+  <button id="drawZonaBtn">+ Nova zona (desenhar)</button>
+  <button id="finishZonaBtn" disabled>Finalizar zona</button>
+  <button id="cancelZonaBtn" disabled>Cancelar desenho</button>
+
+  <h3>Zona selecionada</h3>
+  <select id="zonaIgreja"><option value="">-- sem igreja --</option></select>
+  <select id="zonaStatus">
+    <option value="nao_iniciado">Não iniciado</option>
+    <option value="em_andamento">Em andamento</option>
+    <option value="concluido">Concluído</option>
+  </select>
+  <textarea id="zonaObs" placeholder="Observações"></textarea>
+  <label style="font-size:12px">Cor personalizada:
+    <input type="color" id="zonaColor" value="#3388ff">
+  </label>
+  <div class="row2">
+    <button id="zonaColorApplyBtn">Aplicar cor</button>
+    <button id="zonaColorClearBtn">Cor padrão</button>
+  </div>
+  <button id="saveZonaBtn" disabled>Salvar zona</button>
+  <button id="zonaDetailsBtn" disabled>Ver detalhes da zona</button>
+  <div class="row2">
+    <button id="deleteZonaBtn" class="danger" disabled>Excluir</button>
+    <button id="deselectZonaBtn" disabled>Deselecionar</button>
+  </div>
+
+  <h3>Membros</h3>
+  <select id="membroIgreja"></select>
+  <button id="addMembroBtn">+ Membro fictício</button>
+  <div id="members"></div>
+
+  <hr>
+  <h3>Backup / GitHub</h3>
+  <button id="exportBtn">Exportar db.json</button>
+  <label style="font-size:11px">Importar db.json:
+    <input type="file" id="importFile">
+  </label>
+  <details>
+    <summary>Configurar sincronização GitHub</summary>
+    <input id="ghRepo" placeholder="owner/repositorio">
+    <input id="ghBranch" placeholder="branch (ex: main)">
+    <input id="ghPath" placeholder="caminho (ex: db.json)">
+    <input id="ghToken" type="password" placeholder="token de acesso">
+    <label style="font-size:11px"><input type="checkbox" id="ghAuto" style="width:auto"> sincronizar automaticamente ao salvar</label>
+    <button id="ghSaveCfgBtn">Salvar configuração</button>
+    <button id="ghPushBtn">Enviar para GitHub</button>
+    <button id="ghPullBtn">Carregar do GitHub</button>
+  </details>
+</div>
+
+<div class="modal-overlay" id="modalOverlay"><div class="modal-box" id="modalBox"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ---------- Modal / Toast ----------
+const modalOverlay = document.getElementById('modalOverlay');
+const modalBox = document.getElementById('modalBox');
+function closeModal(){ modalOverlay.style.display = 'none'; modalBox.innerHTML=''; }
+modalOverlay.addEventListener('click', e=>{ if(e.target===modalOverlay) closeModal(); });
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>{ t.style.display='none'; }, 2600);
+}
+function askText(title, defaultVal){
+  return new Promise(resolve=>{
+    modalBox.innerHTML = `<h3>${title}</h3>
+      <input id="modalInput" type="text" value="${(defaultVal||'').replace(/"/g,'&quot;')}">
+      <div class="modal-actions"><button id="modalOk">OK</button><button id="modalCancel">Cancelar</button></div>`;
+    modalOverlay.style.display = 'flex';
+    const input = document.getElementById('modalInput');
+    setTimeout(()=>{ input.focus(); input.select(); }, 30);
+    const finish = val => { closeModal(); resolve(val); };
+    document.getElementById('modalOk').onclick = ()=> finish(input.value.trim());
+    document.getElementById('modalCancel').onclick = ()=> finish(null);
+    input.onkeydown = ev=>{
+      if(ev.key==='Enter') document.getElementById('modalOk').click();
+      if(ev.key==='Escape') document.getElementById('modalCancel').click();
+    };
+  });
+}
+function askConfirm(message){
+  return new Promise(resolve=>{
+    modalBox.innerHTML = `<p>${message}</p>
+      <div class="modal-actions"><button id="modalYes" class="danger">Confirmar</button><button id="modalNo">Cancelar</button></div>`;
+    modalOverlay.style.display = 'flex';
+    document.getElementById('modalYes').onclick = ()=>{ closeModal(); resolve(true); };
+    document.getElementById('modalNo').onclick = ()=>{ closeModal(); resolve(false); };
+  });
+}
+
+// ---------- DB ----------
+const DB_KEY = "evangelismo_db";
+function loadDB(){
+  return JSON.parse(localStorage.getItem(DB_KEY) || '{"igrejas":[],"zonas":[],"membros":[]}');
+}
+function saveDB(d){ localStorage.setItem(DB_KEY, JSON.stringify(d)); }
+let db = loadDB();
+
+function uuid(){
+  return crypto.randomUUID ? crypto.randomUUID() :
+    'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+      const r=Math.random()*16|0,v=c=='x'?r:(r&0x3|0x8);return v.toString(16);
+    });
+}
+async function hashId(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,16);
+}
+const NOMES = ["João","Maria","Pedro","Ana","Lucas","Julia","Marcos","Paula","Rafael","Bia"];
+const SOBRENOMES = ["Silva","Souza","Lima","Costa","Alves","Pereira","Rocha","Nunes"];
+function nomeFicticio(){
+  return NOMES[Math.floor(Math.random()*NOMES.length)]+" "+SOBRENOMES[Math.floor(Math.random()*SOBRENOMES.length)];
+}
+
+function persist(){
+  saveDB(db);
+  const selId = selectedZonaLayer ? selectedZonaLayer._zonaId : null;
+  renderAll();
+  if(selId){
+    const layer = findZonaLayer(selId);
+    if(layer) selectZona(layer); else deselectZona();
+  }
+  const cfg = loadGhConfig();
+  if(cfg.auto && cfg.token && cfg.repo) pushToGitHub(true);
+}
+
+// ---------- Mapa ----------
+const mapEl = document.getElementById('map');
+const map = L.map('map').setView([-3.73,-38.52],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+
+const drawnItems = new L.FeatureGroup().addTo(map);
+const igrejaLayer = L.layerGroup().addTo(map);
+const memberAreaLayer = L.layerGroup().addTo(map);
+const soulsLayer = L.layerGroup().addTo(map);
+const housesLayer = L.layerGroup().addTo(map);
+const STATUS_COLORS = {nao_iniciado:"#e74c3c", em_andamento:"#f1c40f", concluido:"#2ecc71"};
+
+const CHURCH_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 9h4"/><path d="M12 7v5"/><path d="M14 21v-3a2 2 0 0 0-4 0v3"/><path d="m18 9 3.52 2.147a1 1 0 0 1 .48.854V19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6.999a1 1 0 0 1 .48-.854L6 9"/><path d="M6 21V7a1 1 0 0 1 .376-.782l5-3.999a1 1 0 0 1 1.249.001l5 4A1 1 0 0 1 18 7v14"/></svg>';
+function churchIcon(color){
+  return L.divIcon({className:'', html:`<div class="church-pin" style="background:${color||'#5b3a29'}">${CHURCH_SVG}</div>`,
+    iconSize:[28,28], iconAnchor:[14,28], popupAnchor:[0,-26]});
+}
+
+function setHint(text){
+  const h = document.getElementById('hintBar');
+  h.textContent = text;
+  h.style.display = text ? 'block' : 'none';
+}
+
+function polygonCentroid(geom){
+  const ring = geom.coordinates[0];
+  const pts = ring.slice(0, ring.length-1);
+  let latSum=0,lngSum=0;
+  pts.forEach(c=>{ lngSum+=c[0]; latSum+=c[1]; });
+  return {lat: latSum/pts.length, lng: lngSum/pts.length};
+}
+
+// ---------- Cancelamento centralizado de modos ----------
+function stopAllModes(){
+  stopAddingIgreja();
+  cancelZonaDrawing();
+  cancelMemberAreaMode();
+  cancelHouseMarkMode();
+  disableMoveMode();
+  finishEditZonaVertices(true);
+}
+
+// ---------- Modo: adicionar igreja ----------
+let addingIgreja = false;
+const addIgrejaBtn = document.getElementById('addIgrejaBtn');
+addIgrejaBtn.onclick = ()=>{
+  if(addingIgreja){ stopAddingIgreja(); return; }
+  stopAllModes();
+  addingIgreja = true;
+  addIgrejaBtn.textContent = "Cancelar (clique no mapa)";
+  addIgrejaBtn.classList.add('active');
+  mapEl.classList.add('mode-igreja');
+  setHint("Clique no mapa para posicionar a igreja.");
+};
+function stopAddingIgreja(){
+  addingIgreja = false;
+  addIgrejaBtn.textContent = "+ Igreja (clique no mapa)";
+  addIgrejaBtn.classList.remove('active');
+  mapEl.classList.remove('mode-igreja');
+  setHint("");
+}
+
+// ---------- Modo: desenhar zona ----------
+let drawingZona = false;
+let drawPoints = [];
+let tempMarkers = [];
+let tempPolyline = null;
+let tempPolygon = null;
+const drawZonaBtn = document.getElementById('drawZonaBtn');
+const finishZonaBtn = document.getElementById('finishZonaBtn');
+const cancelZonaBtn = document.getElementById('cancelZonaBtn');
+
+drawZonaBtn.onclick = ()=>{
+  stopAllModes();
+  drawingZona = true;
+  drawPoints = [];
+  clearTempDraw();
+  mapEl.classList.add('mode-zona');
+  drawZonaBtn.classList.add('active');
+  finishZonaBtn.disabled = true;
+  cancelZonaBtn.disabled = false;
+  setHint("Clique no mapa para adicionar pontos da zona (mínimo 3).");
+};
+function clearTempDraw(){
+  tempMarkers.forEach(m=>map.removeLayer(m));
+  tempMarkers = [];
+  if(tempPolyline){ map.removeLayer(tempPolyline); tempPolyline = null; }
+  if(tempPolygon){ map.removeLayer(tempPolygon); tempPolygon = null; }
+}
+function cancelZonaDrawing(){
+  drawingZona = false;
+  drawPoints = [];
+  clearTempDraw();
+  mapEl.classList.remove('mode-zona');
+  drawZonaBtn.classList.remove('active');
+  finishZonaBtn.disabled = true;
+  cancelZonaBtn.disabled = true;
+  setHint("");
+}
+cancelZonaBtn.onclick = cancelZonaDrawing;
+function redrawTempShape(){
+  if(tempPolyline) map.removeLayer(tempPolyline);
+  if(tempPolygon) map.removeLayer(tempPolygon);
+  if(drawPoints.length>=2) tempPolyline = L.polyline(drawPoints,{color:"#3388ff",dashArray:"4,4"}).addTo(map);
+  if(drawPoints.length>=3) tempPolygon = L.polygon(drawPoints,{color:"#3388ff",fillOpacity:0.2}).addTo(map);
+  finishZonaBtn.disabled = drawPoints.length < 3;
+}
+finishZonaBtn.onclick = ()=>{
+  if(drawPoints.length<3) return;
+  const coords = drawPoints.map(p=>[p.lng,p.lat]);
+  coords.push(coords[0]);
+  const geometry = {type:"Polygon", coordinates:[coords]};
+  const now = new Date().toISOString();
+  const zona = {id:uuid(), igreja_id:null, poligono:geometry,
+    status_evangelizacao:"nao_iniciado", observacoes:"", created_at:now, updated_at:now,
+    ultima_visita:null, casas:[]};
+  db.zonas.push(zona);
+  cancelZonaDrawing();
+  persist();
+  const layer = findZonaLayer(zona.id);
+  if(layer) selectZona(layer);
+  toast("Zona criada.");
+};
+
+// ---------- Modo: marcar área circular do membro ----------
+let memberAreaTarget = null;
+let memberAreaCenter = null;
+let memberAreaCenterMarker = null;
+let memberAreaTempCircle = null;
+function startMemberAreaMode(membroId){
+  closeModal();
+  stopAllModes();
+  memberAreaTarget = membroId;
+  memberAreaCenter = null;
+  mapEl.classList.add('mode-area');
+  setHint("Clique no mapa para marcar onde o membro mora (centro da área).");
+}
+function cancelMemberAreaMode(){
+  memberAreaTarget = null;
+  memberAreaCenter = null;
+  if(memberAreaCenterMarker){ map.removeLayer(memberAreaCenterMarker); memberAreaCenterMarker=null; }
+  if(memberAreaTempCircle){ map.removeLayer(memberAreaTempCircle); memberAreaTempCircle=null; }
+  mapEl.classList.remove('mode-area');
+}
+
+// ---------- Modo: marcar casa visitada ----------
+let houseMarkTarget = null;
+function startHouseMarkMode(zonaId, endereco){
+  closeModal();
+  stopAllModes();
+  houseMarkTarget = {zonaId, endereco};
+  mapEl.classList.add('mode-area');
+  setHint(`Clique no mapa para marcar a localização de: ${endereco}`);
+}
+function cancelHouseMarkMode(){
+  houseMarkTarget = null;
+  mapEl.classList.remove('mode-area');
+}
+
+map.on('mousemove', e=>{
+  if(memberAreaTarget && memberAreaCenter){
+    if(memberAreaTempCircle) map.removeLayer(memberAreaTempCircle);
+    const r = map.distance(memberAreaCenter, e.latlng);
+    memberAreaTempCircle = L.circle(memberAreaCenter,{radius:r,color:"#8e44ad",fillOpacity:0.15,dashArray:"4,4"}).addTo(map);
+  }
+});
+
+map.on('click', e=>{
+  if(houseMarkTarget){
+    const {zonaId, endereco} = houseMarkTarget;
+    const zona = db.zonas.find(z=>z.id===zonaId);
+    if(zona){
+      if(!zona.casas) zona.casas=[];
+      zona.casas.push({id:uuid(), endereco, lat:e.latlng.lat, lng:e.latlng.lng, data_visita:new Date().toISOString(),
+        receptivo:false, recebeu_palavra:false, recebeu_oracao:false});
+      zona.ultima_visita = new Date().toISOString();
+    }
+    cancelHouseMarkMode();
+    setHint("");
+    persist();
+    toast("Casa marcada no mapa.");
+    openZonaModal(zonaId);
+    return;
+  }
+  if(memberAreaTarget){
+    if(!memberAreaCenter){
+      memberAreaCenter = e.latlng;
+      memberAreaCenterMarker = L.circleMarker(e.latlng,{radius:5,color:"#8e44ad",fillColor:"#8e44ad",fillOpacity:1}).addTo(map);
+      setHint("Agora clique para definir o tamanho da área.");
+    } else {
+      const radius = Math.max(20, Math.round(map.distance(memberAreaCenter, e.latlng)));
+      const membro = db.membros.find(m=>m.id===memberAreaTarget);
+      if(membro) membro.area = {lat:memberAreaCenter.lat, lng:memberAreaCenter.lng, radius};
+      const targetId = memberAreaTarget;
+      cancelMemberAreaMode();
+      setHint("");
+      persist();
+      toast("Área do membro salva.");
+      openMemberModal(targetId);
+    }
+    return;
+  }
+  if(addingIgreja){
+    stopAddingIgreja();
+    askText("Nome da igreja:", "").then(nome=>{
+      if(nome===null) return;
+      if(!nome){ toast("Nome não pode ser vazio."); return; }
+      db.igrejas.push({id:uuid(), nome, lat:e.latlng.lat, lng:e.latlng.lng, color:"#5b3a29", created_at:new Date().toISOString()});
+      persist();
+      toast("Igreja criada.");
+    });
+    return;
+  }
+  if(drawingZona){
+    drawPoints.push(e.latlng);
+    const idx = drawPoints.length-1;
+    const marker = L.circleMarker(e.latlng,{radius:6,color:"#3388ff",fillColor:"#fff",fillOpacity:1}).addTo(map);
+    marker.on('click', ev=>{
+      L.DomEvent.stopPropagation(ev);
+      if(idx === drawPoints.length-1){
+        drawPoints.pop();
+        map.removeLayer(marker);
+        tempMarkers.pop();
+        redrawTempShape();
+      }
+    });
+    tempMarkers.push(marker);
+    redrawTempShape();
+    return;
+  }
+  if(selectedZonaLayer) deselectZona();
+});
+
+function findZonaLayer(zonaId){
+  let found = null;
+  drawnItems.eachLayer(l=>{ if(l._zonaId===zonaId) found = l; });
+  return found;
+}
+function styleForZona(zona, selected){
+  const baseColor = zona.custom_color || STATUS_COLORS[zona.status_evangelizacao] || "#3388ff";
+  return { color: baseColor, fillColor: baseColor, fillOpacity:0.4,
+    weight: selected ? 4 : 2, dashArray: selected ? "6,4" : null };
+}
+
+// ---------- Seleção de zona + controles (editar/mover) ----------
+let selectedZonaLayer = null;
+let zonaControlMarkers = [];
+function clearZonaControls(){
+  zonaControlMarkers.forEach(m=>map.removeLayer(m));
+  zonaControlMarkers = [];
+}
+function renderZonaControls(zona){
+  clearZonaControls();
+  const c = polygonCentroid(zona.poligono);
+  const dLat = 0.00035, dLng = 0.00045;
+  const editIcon = L.divIcon({className:'', html:'<div class="zone-ctrl-btn" title="Editar vértices">✏️</div>', iconSize:[26,26], iconAnchor:[13,13]});
+  const moveIcon = L.divIcon({className:'', html:'<div class="zone-ctrl-btn" title="Mover zona">✥</div>', iconSize:[26,26], iconAnchor:[13,13]});
+  const editMarker = L.marker([c.lat+dLat, c.lng-dLng], {icon:editIcon}).addTo(map);
+  editMarker.on('click', ()=> startEditZonaVertices(zona.id));
+  const moveMarker = L.marker([c.lat+dLat, c.lng+dLng], {icon:moveIcon}).addTo(map);
+  moveMarker.on('click', ()=> toggleMoveZona(zona.id));
+  zonaControlMarkers = [editMarker, moveMarker];
+}
+
+function selectZona(layer){
+  stopAllModes();
+  selectedZonaLayer = layer;
+  drawnItems.eachLayer(l=>{
+    const z = db.zonas.find(zz=>zz.id===l._zonaId);
+    if(z) l.setStyle(styleForZona(z, l===layer));
+  });
+  const zona = db.zonas.find(z=>z.id===layer._zonaId);
+  document.getElementById('zonaIgreja').value = zona.igreja_id || "";
+  document.getElementById('zonaStatus').value = zona.status_evangelizacao;
+  document.getElementById('zonaObs').value = zona.observacoes;
+  document.getElementById('zonaColor').value = zona.custom_color || STATUS_COLORS[zona.status_evangelizacao];
+  document.getElementById('saveZonaBtn').disabled = false;
+  document.getElementById('deleteZonaBtn').disabled = false;
+  document.getElementById('deselectZonaBtn').disabled = false;
+  document.getElementById('zonaDetailsBtn').disabled = false;
+  renderZonaControls(zona);
+}
+function deselectZona(){
+  selectedZonaLayer = null;
+  document.getElementById('zonaIgreja').value = "";
+  document.getElementById('zonaStatus').value = "nao_iniciado";
+  document.getElementById('zonaObs').value = "";
+  document.getElementById('saveZonaBtn').disabled = true;
+  document.getElementById('deleteZonaBtn').disabled = true;
+  document.getElementById('deselectZonaBtn').disabled = true;
+  document.getElementById('zonaDetailsBtn').disabled = true;
+  clearZonaControls();
+  drawnItems.eachLayer(l=>{
+    const z = db.zonas.find(zz=>zz.id===l._zonaId);
+    if(z) l.setStyle(styleForZona(z, false));
+  });
+}
+document.getElementById('deselectZonaBtn').onclick = deselectZona;
+document.getElementById('zonaDetailsBtn').onclick = ()=>{
+  if(selectedZonaLayer) openZonaModal(selectedZonaLayer._zonaId);
+};
+document.getElementById('zonaColorApplyBtn').onclick = ()=>{
+  if(!selectedZonaLayer) return;
+  const zona = db.zonas.find(z=>z.id===selectedZonaLayer._zonaId);
+  zona.custom_color = document.getElementById('zonaColor').value;
+  persist();
+  toast("Cor aplicada.");
+};
+document.getElementById('zonaColorClearBtn').onclick = ()=>{
+  if(!selectedZonaLayer) return;
+  const zona = db.zonas.find(z=>z.id===selectedZonaLayer._zonaId);
+  delete zona.custom_color;
+  persist();
+  toast("Cor padrão restaurada.");
+};
+
+document.getElementById('saveZonaBtn').onclick = ()=>{
+  if(!selectedZonaLayer) return;
+  const zona = db.zonas.find(z=>z.id===selectedZonaLayer._zonaId);
+  zona.igreja_id = document.getElementById('zonaIgreja').value || null;
+  zona.status_evangelizacao = document.getElementById('zonaStatus').value;
+  zona.observacoes = document.getElementById('zonaObs').value;
+  zona.updated_at = new Date().toISOString();
+  persist();
+  toast("Zona salva.");
+};
+document.getElementById('deleteZonaBtn').onclick = async ()=>{
+  if(!selectedZonaLayer) return;
+  const ok = await askConfirm("Excluir esta zona?");
+  if(!ok) return;
+  db.zonas = db.zonas.filter(z=>z.id!==selectedZonaLayer._zonaId);
+  db.membros.forEach(m=>{ if(m.zona_id===selectedZonaLayer._zonaId) m.zona_id=null; });
+  selectedZonaLayer = null;
+  persist();
+  deselectZona();
+  toast("Zona excluída.");
+};
+
+// ---------- Editar vértices ----------
+let editingZona = null;
+let vertexMarkers = [];
+function startEditZonaVertices(zonaId){
+  stopAllModes();
+  editingZona = zonaId;
+  const layer = findZonaLayer(zonaId);
+  if(!layer) return;
+  const latlngs = layer.getLatLngs()[0];
+  vertexMarkers = latlngs.map(ll=>{
+    const vm = L.marker(ll, {draggable:true, icon:L.divIcon({className:'',
+      html:'<div style="width:14px;height:14px;background:#ff8800;border:2px solid white;border-radius:50%"></div>',
+      iconSize:[14,14], iconAnchor:[7,7]})}).addTo(map);
+    vm.on('drag', ()=>{
+      layer.setLatLngs(vertexMarkers.map(v=>v.getLatLng()));
+    });
+    vm.on('dragend', saveVertexPositions);
+    return vm;
+  });
+  document.getElementById('editControls').style.display = 'block';
+  setHint("Arraste os pontos laranja para ajustar o formato da zona.");
+}
+function saveVertexPositions(){
+  if(!editingZona) return;
+  const zona = db.zonas.find(z=>z.id===editingZona);
+  if(!zona) return;
+  const coords = vertexMarkers.map(v=>{ const ll=v.getLatLng(); return [ll.lng, ll.lat]; });
+  coords.push(coords[0]);
+  zona.poligono = {type:"Polygon", coordinates:[coords]};
+  zona.updated_at = new Date().toISOString();
+  saveDB(db);
+}
+function finishEditZonaVertices(silent){
+  if(!editingZona){ document.getElementById('editControls').style.display='none'; return; }
+  vertexMarkers.forEach(v=>map.removeLayer(v));
+  vertexMarkers = [];
+  editingZona = null;
+  document.getElementById('editControls').style.display = 'none';
+  if(!silent){ setHint(""); persist(); toast("Edição concluída."); }
+}
+document.getElementById('finishEditBtn').onclick = ()=> finishEditZonaVertices(false);
+
+// ---------- Mover zona inteira ----------
+let movingZonaId = null;
+let moveState = null;
+function onZonaMoveStart(e){
+  L.DomEvent.stopPropagation(e);
+  map.dragging.disable();
+  moveState = { zonaId: movingZonaId, startLatLng: e.latlng };
+  map.on('mousemove', onZonaMoveDrag);
+  map.on('mouseup', onZonaMoveEnd);
+}
+function onZonaMoveDrag(e){
+  if(!moveState) return;
+  const layer = findZonaLayer(moveState.zonaId);
+  if(!layer) return;
+  const dLat = e.latlng.lat - moveState.startLatLng.lat;
+  const dLng = e.latlng.lng - moveState.startLatLng.lng;
+  const newLatLngs = layer.getLatLngs()[0].map(ll=>L.latLng(ll.lat+dLat, ll.lng+dLng));
+  layer.setLatLngs(newLatLngs);
+  moveState.startLatLng = e.latlng;
+}
+function onZonaMoveEnd(){
+  if(!moveState) return;
+  const layer = findZonaLayer(moveState.zonaId);
+  const zona = db.zonas.find(z=>z.id===moveState.zonaId);
+  if(layer && zona){
+    const coords = layer.getLatLngs()[0].map(ll=>[ll.lng, ll.lat]);
+    coords.push(coords[0]);
+    zona.poligono = {type:"Polygon", coordinates:[coords]};
+    zona.updated_at = new Date().toISOString();
+    saveDB(db);
+  }
+  map.off('mousemove', onZonaMoveDrag);
+  map.off('mouseup', onZonaMoveEnd);
+  moveState = null;
+}
+function toggleMoveZona(zonaId){
+  if(movingZonaId===zonaId){ disableMoveMode(); toast("Modo mover desativado."); return; }
+  stopAllModes();
+  movingZonaId = zonaId;
+  const layer = findZonaLayer(zonaId);
+  if(layer) layer.on('mousedown', onZonaMoveStart);
+  setHint("Clique e arraste a zona para movê-la. Clique no ícone ✥ novamente para concluir.");
+}
+function disableMoveMode(){
+  if(movingZonaId){
+    const layer = findZonaLayer(movingZonaId);
+    if(layer) layer.off('mousedown', onZonaMoveStart);
+    map.dragging.enable();
+    map.off('mousemove', onZonaMoveDrag);
+    map.off('mouseup', onZonaMoveEnd);
+  }
+  movingZonaId = null;
+  moveState = null;
+  setHint("");
+  const zona = selectedZonaLayer && db.zonas.find(z=>z.id===selectedZonaLayer._zonaId);
+  if(zona) persist();
+}
+
+// ---------- Membros ----------
+document.getElementById('addMembroBtn').onclick = async ()=>{
+  const igreja_id = document.getElementById('membroIgreja').value;
+  if(!igreja_id){ toast("Selecione uma igreja."); return; }
+  const nome_ficticio = nomeFicticio();
+  const hash_id = await hashId(nome_ficticio+Date.now()+Math.random());
+  db.membros.push({id:uuid(), igreja_id, zona_id:null, nome_ficticio, hash_id, created_at:new Date().toISOString()});
+  persist();
+  toast("Membro adicionado.");
+};
+async function deleteMembro(id){
+  const ok = await askConfirm("Excluir este membro?");
+  if(!ok) return;
+  db.membros = db.membros.filter(m=>m.id!==id);
+  persist();
+  toast("Membro excluído.");
+}
+async function editIgreja(id){
+  const ig = db.igrejas.find(i=>i.id===id);
+  if(!ig) return;
+  const novo = await askText("Novo nome da igreja:", ig.nome);
+  if(novo===null) return;
+  if(!novo){ toast("Nome não pode ser vazio."); return; }
+  ig.nome = novo;
+  persist();
+  toast("Igreja atualizada.");
+}
+async function deleteIgreja(id){
+  const ok = await askConfirm("Excluir esta igreja? Zonas ficarão sem vínculo e membros serão removidos.");
+  if(!ok) return;
+  db.igrejas = db.igrejas.filter(i=>i.id!==id);
+  db.zonas.forEach(z=>{ if(z.igreja_id===id) z.igreja_id = null; });
+  db.membros = db.membros.filter(m=>m.igreja_id!==id);
+  persist();
+  toast("Igreja excluída.");
+}
+window.editIgreja = editIgreja;
+window.deleteIgreja = deleteIgreja;
+window.deleteMembro = deleteMembro;
+
+// ---------- Modal de detalhes/edição do membro ----------
+function openMemberModal(id){
+  const m = db.membros.find(x=>x.id===id);
+  if(!m) return;
+  const zonasIgreja = db.zonas.filter(z=>z.igreja_id===m.igreja_id);
+  const zonaOpts = '<option value="">-- sem zona --</option>' +
+    zonasIgreja.map(z=>`<option value="${z.id}" ${z.id===m.zona_id?'selected':''}>${(z.observacoes||'Zona').slice(0,24) || 'Zona'} (${z.status_evangelizacao})</option>`).join('');
+  const igrejaOpts = db.igrejas.map(i=>`<option value="${i.id}" ${i.id===m.igreja_id?'selected':''}>${i.nome}</option>`).join('');
+  const dtLocal = new Date(m.created_at);
+  const dtValue = new Date(dtLocal.getTime() - dtLocal.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  modalBox.innerHTML = `
+    <h3>Detalhes do membro</h3>
+    <label style="font-size:12px">Nome fictício:
+      <input id="mNome" type="text" value="${m.nome_ficticio.replace(/"/g,'&quot;')}">
+    </label>
+    <div><b>Hash:</b> <code class="hashfull">${m.hash_id}</code></div>
+    <label style="font-size:12px">Igreja:
+      <select id="mIgreja">${igrejaOpts}</select>
+    </label>
+    <label style="font-size:12px">Zona vinculada:
+      <select id="mZona">${zonaOpts}</select>
+    </label>
+    <label style="font-size:12px">Data de cadastro:
+      <input id="mData" type="datetime-local" value="${dtValue}">
+    </label>
+    <div style="margin-top:8px"><b>Local onde mora:</b> ${m.area ? `raio de ${m.area.radius} m definido` : 'não definido'}</div>
+    <button id="mMarkArea">${m.area ? 'Redefinir local no mapa' : 'Marcar local no mapa'}</button>
+    ${m.area ? '<button id="mRemoveArea" class="danger">Remover área</button>' : ''}
+    ${m.area ? '<button id="mGoToArea">Ver no mapa</button>' : ''}
+    <div class="modal-actions">
+      <button id="mSave">Salvar</button>
+      <button id="mClose">Fechar</button>
+    </div>`;
+  modalOverlay.style.display = 'flex';
+  document.getElementById('mIgreja').onchange = ()=>{
+    m.igreja_id = document.getElementById('mIgreja').value;
+    openMemberModal(id);
+  };
+  document.getElementById('mSave').onclick = ()=>{
+    const nome = document.getElementById('mNome').value.trim();
+    if(!nome){ toast("Nome não pode ser vazio."); return; }
+    m.nome_ficticio = nome;
+    m.igreja_id = document.getElementById('mIgreja').value;
+    m.zona_id = document.getElementById('mZona').value || null;
+    const dt = document.getElementById('mData').value;
+    if(dt) m.created_at = new Date(dt).toISOString();
+    persist();
+    closeModal();
+    toast("Membro atualizado.");
+  };
+  document.getElementById('mClose').onclick = closeModal;
+  document.getElementById('mMarkArea').onclick = ()=> startMemberAreaMode(m.id);
+  if(m.area){
+    document.getElementById('mRemoveArea').onclick = async ()=>{
+      const ok = await askConfirm("Remover a área marcada deste membro?");
+      if(!ok) return;
+      delete m.area;
+      persist();
+      closeModal();
+      toast("Área removida.");
+    };
+    document.getElementById('mGoToArea').onclick = ()=>{
+      map.setView([m.area.lat, m.area.lng], 17);
+      closeModal();
+    };
+  }
+}
+window.openMemberModal = openMemberModal;
+
+// ---------- Modal de detalhes da igreja ----------
+function openChurchModal(id){
+  const ig = db.igrejas.find(i=>i.id===id);
+  if(!ig) return;
+  const membros = db.membros.filter(m=>m.igreja_id===id);
+  const zonas = db.zonas.filter(z=>z.igreja_id===id);
+  const membrosHtml = membros.map(m=>
+    `<div class="member-row">${m.nome_ficticio} <code>${m.hash_id.slice(0,8)}</code>
+     <button onclick="openMemberModal('${m.id}')">Detalhes</button></div>`
+  ).join('') || '<i>Nenhum membro cadastrado</i>';
+  modalBox.innerHTML = `
+    <h3>${ig.nome}</h3>
+    <div><b>Cadastrada em:</b> ${new Date(ig.created_at).toLocaleString()}</div>
+    <div><b>Zonas vinculadas:</b> ${zonas.length}</div>
+    <label style="font-size:12px">Cor do ícone:
+      <input type="color" id="chColor" value="${ig.color||'#5b3a29'}">
+    </label>
+    <button id="chSaveColor">Salvar cor</button>
+    <h3>Membros (${membros.length})</h3>
+    <div id="churchMembers" style="max-height:180px;overflow:auto;font-size:12px">${membrosHtml}</div>
+    <div class="modal-actions"><button id="cClose">Fechar</button></div>`;
+  modalOverlay.style.display = 'flex';
+  document.getElementById('cClose').onclick = closeModal;
+  document.getElementById('chSaveColor').onclick = ()=>{
+    ig.color = document.getElementById('chColor').value;
+    persist();
+    toast("Cor da igreja atualizada.");
+    openChurchModal(id);
+  };
+}
+window.openChurchModal = openChurchModal;
+
+// ---------- Modal de detalhes da zona ----------
+function openZonaModal(id){
+  const zona = db.zonas.find(z=>z.id===id);
+  if(!zona) return;
+  const casas = zona.casas || [];
+  const receptivas = casas.filter(c=>c.receptivo).length;
+  const palavra = casas.filter(c=>c.recebeu_palavra).length;
+  const oracao = casas.filter(c=>c.recebeu_oracao).length;
+  const casasHtml = casas.map(c=>`
+    <div style="border-bottom:1px solid #eee;padding:4px 0">
+      <div>${c.endereco}</div>
+      <small>${new Date(c.data_visita).toLocaleDateString()}</small><br>
+      <label style="display:inline-flex;align-items:center;gap:2px;width:auto"><input type="checkbox" ${c.receptivo?'checked':''} onchange="toggleCasaFlag('${zona.id}','${c.id}','receptivo',this.checked)">receptivo</label>
+      <label style="display:inline-flex;align-items:center;gap:2px;width:auto"><input type="checkbox" ${c.recebeu_palavra?'checked':''} onchange="toggleCasaFlag('${zona.id}','${c.id}','recebeu_palavra',this.checked)">palavra</label>
+      <label style="display:inline-flex;align-items:center;gap:2px;width:auto"><input type="checkbox" ${c.recebeu_oracao?'checked':''} onchange="toggleCasaFlag('${zona.id}','${c.id}','recebeu_oracao',this.checked)">oração</label>
+      <button style="width:auto" onclick="removeCasa('${zona.id}','${c.id}')">Remover</button>
+    </div>`).join('') || '<i>Nenhuma casa registrada</i>';
+  modalBox.innerHTML = `
+    <h3>Detalhes da zona</h3>
+    <div><b>Criada em:</b> ${zona.created_at? new Date(zona.created_at).toLocaleString():'-'}</div>
+    <div><b>Última visita:</b> ${zona.ultima_visita? new Date(zona.ultima_visita).toLocaleString():'-'}</div>
+    <div><b>Casas visitadas:</b> ${casas.length}</div>
+    <div><b>Pessoas receptivas:</b> ${receptivas}</div>
+    <div><b>Receberam a palavra:</b> ${palavra}</div>
+    <div><b>Receberam oração:</b> ${oracao}</div>
+    <h3>Casas</h3>
+    <div style="max-height:180px;overflow:auto">${casasHtml}</div>
+    <button id="zAddCasa">+ Adicionar casa visitada</button>
+    <div class="modal-actions"><button id="zClose">Fechar</button></div>`;
+  modalOverlay.style.display='flex';
+  document.getElementById('zAddCasa').onclick = async ()=>{
+    const addr = await askText("Endereço da casa visitada:", "");
+    if(!addr) return;
+    startHouseMarkMode(zona.id, addr);
+  };
+  document.getElementById('zClose').onclick = closeModal;
+}
+window.openZonaModal = openZonaModal;
+function toggleCasaFlag(zonaId, casaId, field, value){
+  const zona = db.zonas.find(z=>z.id===zonaId);
+  const casa = (zona.casas||[]).find(c=>c.id===casaId);
+  if(!casa) return;
+  casa[field] = value;
+  saveDB(db);
+  openZonaModal(zonaId);
+}
+window.toggleCasaFlag = toggleCasaFlag;
+function removeCasa(zonaId, casaId){
+  const zona = db.zonas.find(z=>z.id===zonaId);
+  zona.casas = (zona.casas||[]).filter(c=>c.id!==casaId);
+  persist();
+  openZonaModal(zonaId);
+}
+window.removeCasa = removeCasa;
+
+// ---------- Render ----------
+function renderZonas(){
+  drawnItems.clearLayers();
+  db.zonas.forEach(zona=>{
+    if(!zona.poligono) return;
+    const layer = L.GeoJSON.geometryToLayer(zona.poligono);
+    layer._zonaId = zona.id;
+    layer.setStyle(styleForZona(zona, selectedZonaLayer && selectedZonaLayer._zonaId===zona.id));
+    const igreja = db.igrejas.find(i=>i.id===zona.igreja_id);
+    layer.bindTooltip(igreja ? igreja.nome : "Sem igreja vinculada");
+    layer.bindPopup(`<button onclick="openZonaModal('${zona.id}')">Ver detalhes da zona</button>`);
+    layer.on('click', ev=>{
+      L.DomEvent.stopPropagation(ev);
+      if(selectedZonaLayer && selectedZonaLayer._zonaId===zona.id){ deselectZona(); }
+      else{ selectZona(layer); }
+    });
+    drawnItems.addLayer(layer);
+  });
+}
+function renderIgrejas(){
+  igrejaLayer.clearLayers();
+  db.igrejas.forEach(ig=>{
+    const popupHtml = `<b>${ig.nome}</b><br>
+      <button onclick="openChurchModal('${ig.id}')">Ver detalhes</button>
+      <button onclick="editIgreja('${ig.id}')">Editar nome</button>
+      <button onclick="deleteIgreja('${ig.id}')">Excluir</button>`;
+    const marker = L.marker([ig.lat, ig.lng], {draggable:true, icon:churchIcon(ig.color)}).addTo(igrejaLayer).bindPopup(popupHtml);
+    marker.on('dragend', ()=>{
+      const pos = marker.getLatLng();
+      ig.lat = pos.lat; ig.lng = pos.lng;
+      saveDB(db);
+    });
+  });
+}
+function renderSouls(){
+  soulsLayer.clearLayers();
+  db.zonas.forEach(zona=>{
+    const linked = db.membros.filter(m=>m.zona_id===zona.id);
+    if(!linked.length || !zona.poligono) return;
+    const center = polygonCentroid(zona.poligono);
+    linked.forEach((m,i)=>{
+      const angle = (i/Math.max(linked.length,1))*2*Math.PI;
+      const rMeters = 6 + Math.floor(i/8)*10;
+      const dLat = (rMeters/111320)*Math.cos(angle);
+      const dLng = (rMeters/(111320*Math.cos(center.lat*Math.PI/180)))*Math.sin(angle);
+      const icon = L.divIcon({className:'', html:'<div class="soul-icon">🔥</div>', iconSize:[20,20], iconAnchor:[10,18]});
+      L.marker([center.lat+dLat, center.lng+dLng], {icon}).bindTooltip(m.nome_ficticio+" (alma)").addTo(soulsLayer);
+    });
+  });
+}
+function renderHouses(){
+  housesLayer.clearLayers();
+  db.zonas.forEach(zona=>{
+    (zona.casas||[]).forEach(casa=>{
+      if(casa.lat==null) return;
+      const icon = L.divIcon({className:'', html:'<div class="house-icon">💬</div>', iconSize:[22,22], iconAnchor:[11,20]});
+      L.marker([casa.lat, casa.lng], {icon}).bindTooltip(casa.endereco).addTo(housesLayer);
+    });
+  });
+}
+
+function renderAll(){
+  renderIgrejas();
+  renderZonas();
+  renderSouls();
+  renderHouses();
+  const opts = db.igrejas.map(ig=>`<option value="${ig.id}">${ig.nome}</option>`).join('');
+  document.getElementById('igrejaSelect').innerHTML = '<option value="">-- ir para igreja --</option>'+opts;
+  document.getElementById('zonaIgreja').innerHTML = '<option value="">-- sem igreja --</option>'+opts;
+  document.getElementById('membroIgreja').innerHTML = opts;
+  document.getElementById('noIgrejaHint').style.display = db.igrejas.length ? 'none' : 'block';
+  renderMembers();
+}
+function renderMembers(){
+  const igreja_id = document.getElementById('membroIgreja').value;
+  const list = db.membros.filter(m=>m.igreja_id===igreja_id);
+  document.getElementById('members').innerHTML = list.map(m=>
+    `<div class="member-row">${m.nome_ficticio} <code>${m.hash_id.slice(0,8)}</code>
+     <span><button onclick="openMemberModal('${m.id}')">Detalhes</button>
+     <button onclick="deleteMembro('${m.id}')">x</button></span></div>`).join('') || '<i>Nenhum</i>';
+}
+document.getElementById('membroIgreja').onchange = renderMembers;
+document.getElementById('igrejaSelect').onchange = e=>{
+  const ig = db.igrejas.find(i=>i.id===e.target.value);
+  if(ig) map.setView([ig.lat, ig.lng], 16);
+};
+
+// ---------- Export/Import ----------
+document.getElementById('exportBtn').onclick = ()=>{
+  const blob = new Blob([JSON.stringify(db,null,2)], {type:"application/json"});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = "db.json"; a.click();
+};
+document.getElementById('importFile').onchange = e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      db = JSON.parse(reader.result);
+      deselectZona();
+      persist();
+      toast("Dados importados.");
+    }catch(err){ toast("Arquivo inválido: "+err.message); }
+  };
+  reader.readAsText(file);
+};
+
+// ---------- GitHub sync ----------
+const GH_KEY = "evangelismo_gh_cfg";
+function loadGhConfig(){ return JSON.parse(localStorage.getItem(GH_KEY) || '{}'); }
+function saveGhConfig(cfg){ localStorage.setItem(GH_KEY, JSON.stringify(cfg)); }
+(function fillGhForm(){
+  const cfg = loadGhConfig();
+  document.getElementById('ghRepo').value = cfg.repo || '';
+  document.getElementById('ghBranch').value = cfg.branch || 'main';
+  document.getElementById('ghPath').value = cfg.path || 'db.json';
+  document.getElementById('ghToken').value = cfg.token || '';
+  document.getElementById('ghAuto').checked = !!cfg.auto;
+})();
+document.getElementById('ghSaveCfgBtn').onclick = ()=>{
+  const cfg = {
+    repo: document.getElementById('ghRepo').value.trim(),
+    branch: document.getElementById('ghBranch').value.trim() || 'main',
+    path: document.getElementById('ghPath').value.trim() || 'db.json',
+    token: document.getElementById('ghToken').value.trim(),
+    auto: document.getElementById('ghAuto').checked
+  };
+  if(!cfg.repo || !cfg.token){ toast("Informe ao menos repositório (owner/repo) e token."); return; }
+  saveGhConfig(cfg);
+  toast("Configuração salva.");
+};
+function utf8ToBase64(str){ return btoa(unescape(encodeURIComponent(str))); }
+function base64ToUtf8(b64){ return decodeURIComponent(escape(atob(b64))); }
+async function pushToGitHub(silent){
+  const cfg = loadGhConfig();
+  if(!cfg.repo || !cfg.token) { if(!silent) toast("Configure o GitHub primeiro."); return; }
+  const [owner, repo] = cfg.repo.split('/');
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${cfg.path}`;
+  const headers = { Authorization: `token ${cfg.token}`, Accept: 'application/vnd.github+json' };
+  try{
+    let sha;
+    const getRes = await fetch(`${url}?ref=${cfg.branch}`, { headers });
+    if(getRes.ok){ sha = (await getRes.json()).sha; }
+    const putRes = await fetch(url, {
+      method:'PUT', headers: {...headers, 'Content-Type':'application/json'},
+      body: JSON.stringify({ message:`update db.json (${new Date().toISOString()})`,
+        content: utf8ToBase64(JSON.stringify(db,null,2)), branch: cfg.branch, sha })
+    });
+    if(!putRes.ok){ throw new Error((await putRes.json()).message || putRes.statusText); }
+    if(!silent) toast("Enviado para o GitHub com sucesso.");
+  }catch(err){ if(!silent) toast("Erro ao enviar: "+err.message); console.error(err); }
+}
+async function pullFromGitHub(){
+  const cfg = loadGhConfig();
+  if(!cfg.repo || !cfg.token){ toast("Configure o GitHub primeiro."); return; }
+  const [owner, repo] = cfg.repo.split('/');
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${cfg.path}?ref=${cfg.branch}`;
+  const headers = { Authorization: `token ${cfg.token}`, Accept: 'application/vnd.github+json' };
+  try{
+    const res = await fetch(url, { headers });
+    if(!res.ok) throw new Error((await res.json()).message || res.statusText);
+    const data = await res.json();
+    db = JSON.parse(base64ToUtf8(data.content));
+    deselectZona();
+    saveDB(db);
+    renderAll();
+    toast("Dados carregados do GitHub.");
+  }catch(err){ toast("Erro ao carregar: "+err.message); console.error(err); }
+}
+document.getElementById('ghPushBtn').onclick = ()=>pushToGitHub(false);
+document.getElementById('ghPullBtn').onclick = pullFromGitHub;
+
+renderAll();
+</script>
+</body>
+</html>
