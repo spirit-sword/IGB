@@ -1,0 +1,43 @@
+one in christ.
+
+this app must have the simplest way but also efficient structure to be able to handle many devices at once.
+for example: have a structure for a user initialize a function called "start evangelization" and then start tracking user's location and show a user icon in real moment on the map, also while the user is walking with the location tracking open it will generating track lines while the user is moving to show up from and to where he is moving, other thing that is good is when the user stays too long standing by on a place probably means that he is approaching someone or delivery the message of gospel and then could create circular zones depending on where the user are to define where he stood and for how long, also could update in real time. when the zone that the user stood there for a certain time like 3-5 minutes on that zone that were created could add a icon on the center of speech symbolizing that on that area there was people who listen the gospel by the user, but even this being automatic by the system the manager may have the permission to edit icons position,icons symbol, icons meaning and etc.finally when finishing the evangelization the system could create zones where the users walked and also make able to the manager to edit them all and move them out of place.
+
+ 
+Infraestrutura (pré-requisito p/ multi-dispositivo em tempo real)
+
+Substituir/complementar localStorage por um backend com sync em tempo real (ex: Firebase Firestore free tier ou Supabase free tier — GitHub db.json não serve pra tempo real).
+Definir identificação simples do "evangelizador" (nome/dispositivo, sem auth complexa).
+Modelo de dados novo: sessoes_evangelizacao, pontos_gps (trilha), paradas (stops), icones (editáveis).
+
+Rastreamento de localização
+4. Botão "Iniciar evangelização" → pedir permissão geolocation.watchPosition.
+5. Marcador do usuário atualizado em tempo real no mapa (próprio dispositivo + outros dispositivos via sync).
+6. Gravar pontos GPS em intervalos (ex: a cada X segundos/metros) → desenhar polyline da trilha.
+7. Botão "Finalizar evangelização" → parar tracking, fechar sessão.
+
+Detecção de parada (stop detection)
+8. Lógica: se usuário fica dentro de um raio pequeno por ≥ N minutos (3–5min) → marcar como "parada".
+9. Criar zona circular automática no local da parada (centro + raio baseado na dispersão dos pontos).
+10. Ao atingir o tempo mínimo, adicionar ícone de "fala/gospel" no centro da zona.
+11. Atualização incremental: enquanto o usuário ainda está parado, ir expandindo/ajustando a zona em tempo real.
+
+Zonas de caminho (trilha finalizada)
+12. Ao finalizar, gerar zona(s) representando o trajeto percorrido (buffer em volta da polyline).
+13. Salvar tudo vinculado à sessão/usuário/data.
+
+Edição pelo gestor
+14. Permitir mover posição dos ícones (drag).
+15. Permitir trocar símbolo/tipo do ícone (dropdown de ícones).
+16. Permitir editar "significado" (texto/observação) do ícone.
+17. Permitir editar/mover/excluir zonas geradas automaticamente (parada e trilha).
+
+Multi-dispositivo / performance
+18. Sync eficiente: enviar só deltas (novo ponto GPS, nova parada) em vez de reescrever DB inteiro.
+19. Throttle de updates (não sobrecarregar rede/bateria).
+20. Mostrar múltiplos usuários simultâneos no mapa (cores/nomes diferentes).
+21. Lidar com perda de conexão (buffer local e reenvio).
+
+Config/permissões
+22. Modo "gestor" vs "evangelizador" (mesmo sem auth forte — ex: toggle simples).
+23. Tratar permissão de geolocalização negada/erro.
