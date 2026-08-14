@@ -23,10 +23,24 @@
   .row2 button{flex:1}
   #members div.member-row{display:flex;justify-content:space-between;align-items:center;gap:4px}
   #members button{width:auto;padding:0 6px}
-  #members{max-height:140px;overflow:auto;font-size:12px}
-  #legend{position:absolute;bottom:10px;left:10px;background:#fff;padding:8px 10px;z-index:1000;font-size:12px;box-shadow:0 0 6px #0003}
+  #members{max-height:220px;overflow:auto;font-size:12px}
+  #legend{position:absolute;bottom:10px;left:10px;background:#fff;padding:8px 10px;z-index:1000;font-size:12px;box-shadow:0 0 6px #0003;max-width:180px}
   #legend span{display:inline-block;width:12px;height:12px;margin-right:4px;vertical-align:middle;border-radius:2px}
-  #hintBar{position:absolute;top:10px;left:10px;background:#222;color:#fff;padding:6px 10px;z-index:1000;font-size:12px;border-radius:4px;display:none;max-width:60%}
+  #legendHead{display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:bold;gap:8px}
+  #legendBody.collapsed{display:none}
+  #hintBar{position:absolute;top:10px;left:10px;background:#222;color:#fff;padding:6px 10px;z-index:1000;font-size:12px;border-radius:4px;display:none;max-width:60%;align-items:center;gap:8px}
+  #hintBar.show{display:flex}
+  #cancelModeBtn{background:#e74c3c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;white-space:nowrap}
+  #selectionBar{position:absolute;top:10px;left:10px;background:#3388ff;color:#fff;padding:6px 10px;z-index:999;font-size:12px;border-radius:4px;display:none;max-width:60%}
+  #selectionBar.show{display:block}
+  #toastStack{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:2100;display:flex;flex-direction:column-reverse;gap:6px;align-items:center}
+  .toast-item{background:#222;color:#fff;padding:8px 14px;border-radius:20px;font-size:12px;opacity:0;animation:toastIn .2s forwards}
+  .toast-item.success{background:#1e7e34}
+  .toast-item.danger{background:#c0392b}
+  @keyframes toastIn{to{opacity:1}}
+  #statusFilter{margin-top:6px;font-size:11px;border-top:1px solid #eee;padding-top:6px}
+  #statusFilter label{display:flex;align-items:center;gap:4px;width:auto;font-weight:normal}
+  #zonaSearch{margin:2px 0}
   #editControls{position:absolute;top:56px;left:10px;z-index:1000;display:none}
   #toast{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:20px;z-index:2100;font-size:12px;display:none}
   small.hint{color:#777}
@@ -39,7 +53,7 @@
   .soul-icon{font-size:16px;line-height:1}
   .house-icon{font-size:16px;line-height:1}
   .modal-overlay{position:fixed;inset:0;background:#0007;z-index:3000;display:none;align-items:center;justify-content:center}
-  .modal-box{background:#fff;padding:16px;border-radius:8px;min-width:270px;max-width:92vw;max-height:90vh;overflow:auto;font-size:13px}
+  .modal-box{background:#fff;padding:16px;border-radius:8px;min-width:min(270px,92vw);max-width:92vw;max-height:90vh;overflow:auto;font-size:13px}
   .modal-box h3{margin-top:0}
   .modal-box input,.modal-box select,.modal-box button{width:100%;box-sizing:border-box;margin:4px 0}
   .modal-box input[type=checkbox]{width:auto}
@@ -69,16 +83,26 @@
 </head>
 <body>
 <div id="map"></div>
-<div id="hintBar"></div>
+<div id="hintBar"><span id="hintText"></span><button id="cancelModeBtn">✕ Cancelar</button></div>
+<div id="selectionBar"></div>
 <div id="editControls"><button id="finishEditBtn">Concluir edição de vértices</button></div>
-<div id="toast"></div>
+<div id="toastStack"></div>
 <button id="panelToggle" title="Mostrar/ocultar painel">☰</button>
 
 <div id="legend">
-  <div><span style="background:#e74c3c"></span>Não iniciado</div>
-  <div><span style="background:#f1c40f"></span>Em andamento</div>
-  <div><span style="background:#2ecc71"></span>Concluído</div>
-  <div>🔥 alma vinculada &nbsp; 💬 casa visitada</div>
+  <div id="legendHead"><span>Legenda</span><span id="legendToggleIcon">▾</span></div>
+  <div id="legendBody">
+    <div><span style="background:#e74c3c"></span>Não iniciado</div>
+    <div><span style="background:#f1c40f"></span>Em andamento</div>
+    <div><span style="background:#2ecc71"></span>Concluído</div>
+    <div>🔥 alma vinculada &nbsp; 💬 casa visitada</div>
+    <div id="statusFilter">
+      <div style="font-weight:bold;margin-bottom:2px">Mostrar no mapa:</div>
+      <label><input type="checkbox" class="statusChk" value="nao_iniciado" checked>Não iniciado</label>
+      <label><input type="checkbox" class="statusChk" value="em_andamento" checked>Em andamento</label>
+      <label><input type="checkbox" class="statusChk" value="concluido" checked>Concluído</label>
+    </div>
+  </div>
 </div>
 
 <div id="panel">
@@ -89,15 +113,16 @@
   </div>
 
   <div id="tabAcoes">
-    <h3>Igreja</h3>
-    <button id="addIgrejaBtn">+ Igreja (clique no mapa)</button>
+    <h3>⛪ Igreja</h3>
+    <button id="addIgrejaBtn">➕ Igreja (clique no mapa)</button>
     <select id="igrejaSelect"><option value="">-- ir para igreja --</option></select>
     <small class="hint" id="noIgrejaHint" style="display:none">Nenhuma igreja cadastrada ainda. Clique em "+ Igreja" e depois no mapa para começar.</small>
 
-    <h3>Zona</h3>
-    <button id="drawZonaBtn">+ Nova zona (desenhar)</button>
-    <button id="finishZonaBtn" disabled>Finalizar zona</button>
-    <button id="cancelZonaBtn" disabled>Cancelar desenho</button>
+    <h3>⬟ Zona</h3>
+    <button id="drawZonaBtn">➕ Nova zona (desenhar)</button>
+    <button id="finishZonaBtn" disabled>✔ Finalizar zona</button>
+    <button id="cancelZonaBtn" disabled>✕ Cancelar desenho</button>
+    <input type="text" id="zonaSearch" placeholder="🔎 Buscar zona (igreja/observação)...">
 
     <h3>Zona selecionada <span id="zonaBadge" class="badge" style="display:none"></span></h3>
     <select id="zonaIgreja"><option value="">-- sem igreja --</option></select>
@@ -111,17 +136,17 @@
       <input type="color" id="zonaColor" value="#3388ff">
     </label>
     <div class="row2">
-      <button id="zonaColorApplyBtn" disabled>Aplicar cor</button>
-      <button id="zonaColorClearBtn" disabled>Cor padrão</button>
+      <button id="zonaColorApplyBtn" disabled>🎨 Aplicar cor</button>
+      <button id="zonaColorClearBtn" disabled>↺ Cor padrão</button>
     </div>
-    <button id="saveZonaBtn" disabled>Salvar zona</button>
-    <button id="zonaDetailsBtn" disabled>Ver detalhes da zona</button>
-    <button id="deleteZonaBtn" class="danger" disabled>Excluir</button>
+    <button id="saveZonaBtn" disabled>💾 Salvar zona</button>
+    <button id="zonaDetailsBtn" disabled>ℹ️ Ver detalhes da zona</button>
+    <button id="deleteZonaBtn" class="danger" disabled>🗑️ Excluir</button>
 
-    <h3>Membros</h3>
+    <h3>👤 Membros</h3>
     <select id="membroIgreja"></select>
-    <button id="addMembroBtn">+ Membro fictício</button>
-    <input type="text" id="memberSearch" placeholder="Buscar membro...">
+    <button id="addMembroBtn">➕ Membro fictício</button>
+    <input type="text" id="memberSearch" placeholder="🔎 Buscar membro...">
     <div id="members"></div>
   </div>
 
@@ -134,7 +159,8 @@
 
     <h3>Sincronização GitHub</h3>
     <small class="hint">Envia/recebe o arquivo db.json (todos os dados: igrejas, zonas, membros) em um repositório GitHub. Sincronização é manual — clique nos botões abaixo quando quiser enviar ou buscar os dados.</small>
-    <input id="ghRepo" placeholder="seu-usuario/IGB">
+    <input id="ghRepo" placeholder="seu-usuario/IGB (usuario/repositorio)">
+    <small class="hint">Informe o usuário/organização do GitHub junto com o nome do repositório, ex: <b>seu-usuario/IGB</b></small>
     <input id="ghBranch" placeholder="branch (ex: master)">
     <input id="ghPath" placeholder="caminho (ex: db.json)">
     <input id="ghToken" type="password" placeholder="token de acesso">
@@ -158,11 +184,12 @@ function closeModal(){ modalOverlay.style.display = 'none'; modalBox.innerHTML='
 modalOverlay.addEventListener('click', e=>{ if(e.target===modalOverlay) closeModal(); });
 
 function toast(msg, type){
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.style.display = 'block';
-  t.className = type ? type : '';
-  clearTimeout(t._timer);
-  t._timer = setTimeout(()=>{ t.style.display='none'; }, 2600);
+  const stack = document.getElementById('toastStack');
+  const el = document.createElement('div');
+  el.className = 'toast-item' + (type ? ' '+type : '');
+  el.textContent = msg;
+  stack.appendChild(el);
+  setTimeout(()=>{ el.remove(); }, 2600);
 }
 function askText(title, defaultVal){
   return new Promise(resolve=>{
@@ -252,9 +279,27 @@ function churchIcon(color){
 
 function setHint(text){
   const h = document.getElementById('hintBar');
-  h.textContent = text;
-  h.style.display = text ? 'block' : 'none';
+  document.getElementById('hintText').textContent = text;
+  h.classList.toggle('show', !!text);
 }
+document.getElementById('cancelModeBtn').onclick = ()=>{ stopAllModes(); setHint(""); };
+function setSelectionBar(text){
+  const b = document.getElementById('selectionBar');
+  b.textContent = text;
+  b.classList.toggle('show', !!text);
+}
+document.getElementById('legendHead').onclick = ()=>{
+  document.getElementById('legendBody').classList.toggle('collapsed');
+  const ic = document.getElementById('legendToggleIcon');
+  ic.textContent = document.getElementById('legendBody').classList.contains('collapsed') ? '▸' : '▾';
+};
+let hiddenStatuses = new Set();
+document.querySelectorAll('.statusChk').forEach(chk=>{
+  chk.onchange = ()=>{
+    if(chk.checked) hiddenStatuses.delete(chk.value); else hiddenStatuses.add(chk.value);
+    renderZonas();
+  };
+});
 
 function polygonCentroid(geom){
   const ring = geom.coordinates[0];
@@ -535,9 +580,13 @@ function selectZona(layer){
   badge.textContent = `🔥${almas} 💬${casas}`;
   badge.style.display = 'inline-block';
   renderZonaControls(zona);
+  const ig = db.igrejas.find(i=>i.id===zona.igreja_id);
+  const statusLabel = {nao_iniciado:'Não iniciado', em_andamento:'Em andamento', concluido:'Concluído'}[zona.status_evangelizacao];
+  setSelectionBar(`📍 Zona ${ig?'('+ig.nome+')':'sem igreja'} — ${statusLabel}`);
 }
 function deselectZona(){
   selectedZonaLayer = null;
+  setSelectionBar("");
   document.getElementById('zonaIgreja').value = "";
   document.getElementById('zonaStatus').value = "nao_iniciado";
   document.getElementById('zonaObs').value = "";
@@ -1025,21 +1074,31 @@ function removeCasa(zonaId, casaId){
 window.removeCasa = removeCasa;
 
 // ---------- Render ----------
+const STATUS_LABELS = {nao_iniciado:'Não iniciado', em_andamento:'Em andamento', concluido:'Concluído'};
 function renderZonas(){
   drawnItems.clearLayers();
+  const q = (document.getElementById('zonaSearch')?.value||'').toLowerCase().trim();
   db.zonas.forEach(zona=>{
     if(!zona.poligono) return;
+    if(hiddenStatuses.has(zona.status_evangelizacao)) return;
+    const igreja0 = db.igrejas.find(i=>i.id===zona.igreja_id);
+    if(q){
+      const hay = ((igreja0?igreja0.nome:'')+' '+(zona.observacoes||'')).toLowerCase();
+      if(!hay.includes(q)) return;
+    }
     const layer = L.GeoJSON.geometryToLayer(zona.poligono);
     layer._zonaId = zona.id;
     layer.setStyle(styleForZona(zona, selectedZonaLayer && selectedZonaLayer._zonaId===zona.id));
     const igreja = db.igrejas.find(i=>i.id===zona.igreja_id);
-    layer.bindTooltip(igreja ? igreja.nome : "Sem igreja vinculada");
+    layer.bindTooltip((igreja ? igreja.nome : "Sem igreja vinculada")+" — "+STATUS_LABELS[zona.status_evangelizacao]);
     layer.bindPopup(`<button onclick="openZonaModal('${zona.id}')">Ver detalhes da zona</button>`);
+    layer.off('click');
     layer.on('click', ev=>{
       if(memberAreaTarget || houseMarkTarget || houseMoveTarget) return;
       L.DomEvent.stopPropagation(ev);
       if(selectedZonaLayer && selectedZonaLayer._zonaId===zona.id){ deselectZona(); }
       else{ selectZona(layer); }
+      layer.openPopup(ev.latlng);
     });
     drawnItems.addLayer(layer);
   });
@@ -1164,6 +1223,7 @@ function renderMembers(){
 }
 document.getElementById('membroIgreja').onchange = renderMembers;
 document.getElementById('memberSearch').oninput = renderMembers;
+document.getElementById('zonaSearch').oninput = renderZonas;
 document.getElementById('igrejaSelect').onchange = e=>{
   const ig = db.igrejas.find(i=>i.id===e.target.value);
   if(!ig) return;
@@ -1244,6 +1304,7 @@ document.getElementById('ghSaveCfgBtn').onclick = ()=>{
     lastSync: prev.lastSync, lastPushedPayload: prev.lastPushedPayload
   };
   if(!cfg.repo || !cfg.token){ toast("Informe ao menos repositório (owner/repo) e token."); return; }
+  if(!cfg.repo.includes('/')){ toast("Repositório inválido. Use o formato usuario/repositorio (ex: seu-usuario/IGB)."); return; }
   saveGhConfig(cfg);
   toast("Configuração salva.","success");
 };
@@ -1257,6 +1318,7 @@ async function safeJson(resp){
 async function pushToGitHub(){
   const cfg = loadGhConfig();
   if(!cfg.repo || !cfg.token){ toast("Configure o GitHub primeiro."); return; }
+  if(!cfg.repo.includes('/')){ toast("Repositório inválido. Use o formato usuario/repositorio (ex: seu-usuario/IGB)."); return; }
   const payloadStr = JSON.stringify(db, null, 2);
   if(payloadStr === cfg.lastPushedPayload){
     toast("Já está atualizado no GitHub.","success");
@@ -1288,6 +1350,7 @@ async function pushToGitHub(){
 async function pullFromGitHub(){
   const cfg = loadGhConfig();
   if(!cfg.repo || !cfg.token){ toast("Configure o GitHub primeiro."); return; }
+  if(!cfg.repo.includes('/')){ toast("Repositório inválido. Use o formato usuario/repositorio (ex: seu-usuario/IGB)."); return; }
   const [owner, repo] = cfg.repo.split('/');
   const url = `https://api.github.com/repos/${owner}/${repo}/contents/${cfg.path}?ref=${cfg.branch}`;
   const headers = { Authorization: `token ${cfg.token}`, Accept: 'application/vnd.github+json' };
