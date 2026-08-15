@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mapa de Evangelização</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous"/>
 <style>
@@ -48,8 +48,8 @@
   .church-pin{width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
     display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px #0006}
   .church-pin svg{transform:rotate(45deg)}
-  .zone-ctrl-btn{background:#fff;border:2px solid #333;border-radius:50%;width:26px;height:26px;
-    display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;box-shadow:0 1px 3px #0006}
+  .zone-ctrl-btn{background:#fff;border:2px solid #333;border-radius:50%;width:30px;height:30px;
+    display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;box-shadow:0 1px 3px #0006}
   .soul-icon{font-size:16px;line-height:1}
   .house-icon{font-size:16px;line-height:1}
   .modal-overlay{position:fixed;inset:0;background:#0007;z-index:3000;display:none;align-items:center;justify-content:center}
@@ -75,9 +75,40 @@
   }
   #memberSearch{margin:4px 0}
   .empty-hint{color:#888;font-size:12px;padding:6px 0}
+  .tag-chip{display:inline-flex;align-items:center;gap:4px;background:#eef3ff;color:#2c5fc2;border-radius:12px;
+    padding:2px 8px;font-size:11px;margin:2px 4px 2px 0}
+  .tag-chip b{cursor:pointer;font-weight:bold}
+  #bellBtn{position:absolute;top:10px;right:52px;z-index:1001;background:#222;color:#fff;border:none;
+    border-radius:50%;width:30px;height:30px;font-size:14px;cursor:pointer}
+  #bellBadge{position:absolute;top:-4px;right:-4px;background:#e74c3c;color:#fff;border-radius:8px;
+    font-size:9px;padding:1px 4px;display:none}
+  #bellPanel{position:absolute;top:44px;right:10px;background:#fff;z-index:1002;width:260px;max-width:80vw;
+    max-height:60vh;overflow:auto;box-shadow:0 2px 10px #0004;border-radius:8px;display:none;
+    animation:fadeSlide .18s ease-out}
+  #bellPanel .alert-item{padding:8px 10px;border-bottom:1px solid #eee;font-size:12px;cursor:pointer}
+  #bellPanel .alert-item:hover{background:#f5f7fa}
+  @keyframes fadeSlide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+  .modal-box{animation:fadeSlide .16s ease-out}
+  .toast-item{animation:toastIn .2s ease-out forwards}
   @media (max-width:700px){
-    #panel{top:auto;bottom:0;left:0;right:0;width:100%;max-width:none;max-height:45vh}
-    #legend{bottom:calc(45vh + 10px)}
+    #panel{top:auto;bottom:0;left:0;right:0;width:100%;max-width:none;max-height:50vh;
+      padding-bottom:calc(10px + env(safe-area-inset-bottom));border-radius:12px 12px 0 0}
+    #legend{bottom:calc(50vh + 10px);max-width:150px;font-size:11px;padding:6px 8px}
+    #panel button,#panel select,#panel input,#panel textarea{min-height:40px;font-size:14px}
+    #members button{min-height:32px;padding:0 10px}
+    .modal-box{font-size:14px}
+    .modal-box input,.modal-box select,.modal-box button{min-height:40px}
+    .zone-ctrl-btn{width:32px;height:32px;font-size:16px}
+    #panelToggle{width:38px;height:38px;font-size:16px;top:calc(10px + env(safe-area-inset-top))}
+    #hintBar,#selectionBar{top:calc(10px + env(safe-area-inset-top));max-width:70%;right:50px}
+    #toastStack{bottom:calc(50vh + 16px)}
+    .row2{flex-wrap:wrap}
+    .row2 button{min-width:45%}
+  }
+  @media (max-width:420px){
+    #legend{display:none}
+    #panel{max-height:55vh}
+    #toastStack{bottom:calc(55vh + 16px)}
   }
 </style>
 </head>
@@ -88,6 +119,8 @@
 <div id="editControls"><button id="finishEditBtn">Concluir edição de vértices</button></div>
 <div id="toastStack"></div>
 <button id="panelToggle" title="Mostrar/ocultar painel">☰</button>
+<button id="bellBtn" title="Alertas">🔔<span id="bellBadge">0</span></button>
+<div id="bellPanel"></div>
 
 <div id="legend">
   <div id="legendHead"><span>Legenda</span><span id="legendToggleIcon">▾</span></div>
@@ -109,6 +142,7 @@
   <h3>Gestor</h3>
   <div class="row2">
     <button id="tabBtnAcoes" class="active">Ações</button>
+    <button id="tabBtnMembros">Membros</button>
     <button id="tabBtnCloud">Cloud</button>
   </div>
 
@@ -126,6 +160,12 @@
 
     <h3>Zona selecionada <span id="zonaBadge" class="badge" style="display:none"></span></h3>
     <select id="zonaIgreja"><option value="">-- sem igreja --</option></select>
+    <select id="zonaCategoria">
+      <option value="evangelizacao">Evangelização</option>
+      <option value="campanha">Campanha de doação</option>
+      <option value="cluster">Cluster de membros</option>
+      <option value="celula">Célula</option>
+    </select>
     <select id="zonaStatus">
       <option value="nao_iniciado">Não iniciado</option>
       <option value="em_andamento">Em andamento</option>
@@ -141,13 +181,39 @@
     </div>
     <button id="saveZonaBtn" disabled>💾 Salvar zona</button>
     <button id="zonaDetailsBtn" disabled>ℹ️ Ver detalhes da zona</button>
+    <button id="mergeZonaBtn" disabled>⛓ Mesclar com outra zona</button>
     <button id="deleteZonaBtn" class="danger" disabled>🗑️ Excluir</button>
+  </div>
 
+  <div id="tabMembros" style="display:none">
     <h3>👤 Membros</h3>
     <select id="membroIgreja"></select>
     <button id="addMembroBtn">➕ Membro fictício</button>
-    <input type="text" id="memberSearch" placeholder="🔎 Buscar membro...">
+    <input type="text" id="memberSearch" placeholder="🔎 Buscar membro (nome ou tag)...">
+    <div class="row2">
+      <select id="memberSort">
+        <option value="nome_asc">Nome A-Z</option>
+        <option value="nome_desc">Nome Z-A</option>
+        <option value="data_desc">Mais recentes</option>
+        <option value="data_asc">Mais antigos</option>
+        <option value="zona">Com/sem zona</option>
+      </select>
+      <select id="memberFuncaoFilter">
+        <option value="">Todas as funções</option>
+        <option value="Voluntário">Voluntário</option>
+        <option value="Líder de campanha">Líder de campanha</option>
+        <option value="Equipe de oração">Equipe de oração</option>
+        <option value="Membro">Membro</option>
+      </select>
+    </div>
+    <select id="memberHouseholdFilter">
+      <option value="">Todos (com/sem household)</option>
+      <option value="com">Somente com household</option>
+      <option value="sem">Somente sem household</option>
+    </select>
     <div id="members"></div>
+    <h3>🏠 Households</h3>
+    <div id="householdsList"></div>
   </div>
 
   <div id="tabCloud" style="display:none">
@@ -170,6 +236,15 @@
     <button id="ghPushBtn">⬆ Enviar para GitHub (commit)</button>
     <button id="ghPullBtn">⬇ Carregar do GitHub</button>
     <small class="hint" id="ghLastSync"></small>
+
+    <h3>🔔 Notificações</h3>
+    <small class="hint">Alertas locais (casas sem contato, zonas paradas, prazos de campanha) aparecem no sino no topo do mapa. Ative para também receber uma notificação do navegador enquanto o app estiver aberto.</small>
+    <button id="notifPermBtn">Ativar notificações do navegador</button>
+    <small class="hint" id="notifStatus"></small>
+
+    <h3>📜 Log de atividade</h3>
+    <small class="hint">Histórico local de alterações (não sincroniza via GitHub).</small>
+    <div id="activityLog" style="max-height:200px;overflow:auto;font-size:11px;border-top:1px solid #eee;padding-top:4px"></div>
   </div>
 </div>
 
@@ -221,10 +296,26 @@ function askConfirm(message){
 // ---------- DB ----------
 const DB_KEY = "evangelismo_db";
 function loadDB(){
-  return JSON.parse(localStorage.getItem(DB_KEY) || '{"igrejas":[],"zonas":[],"membros":[]}');
+  const d = JSON.parse(localStorage.getItem(DB_KEY) || '{"igrejas":[],"zonas":[],"membros":[]}');
+  if(!d.households) d.households = [];
+  if(!d.activity_log) d.activity_log = [];
+  return d;
 }
 function saveDB(d){ localStorage.setItem(DB_KEY, JSON.stringify(d)); }
 let db = loadDB();
+const DEVICE_KEY = "evangelismo_device_id";
+let deviceId = localStorage.getItem(DEVICE_KEY);
+if(!deviceId){ deviceId = "Dispositivo-" + Math.random().toString(36).slice(2,7); localStorage.setItem(DEVICE_KEY, deviceId); }
+function logActivity(tipo, descricao){
+  db.activity_log.unshift({id:uuid(), ts:new Date().toISOString(), device:deviceId, tipo, descricao});
+  if(db.activity_log.length>300) db.activity_log.length = 300;
+}
+const CATEGORY_META = {
+  evangelizacao:{label:'Evangelização', dash:null},
+  campanha:{label:'Campanha de doação', dash:'3,7'},
+  cluster:{label:'Cluster de membros', dash:'9,5'},
+  celula:{label:'Célula', dash:'1,5'}
+};
 
 function uuid(){
   return crypto.randomUUID ? crypto.randomUUID() :
@@ -308,6 +399,49 @@ function polygonCentroid(geom){
   pts.forEach(c=>{ lngSum+=c[0]; latSum+=c[1]; });
   return {lat: latSum/pts.length, lng: lngSum/pts.length};
 }
+// Sutherland-Hodgman clip of a ring (array of {lat,lng}, no closing dup) against a line p1-p2.
+// keepPositive true keeps points where cross>=0 (one side), false keeps the other side.
+function clipRingByLine(ring, p1, p2, keepPositive){
+  function cross(pt){ return (p2.lng-p1.lng)*(pt.lat-p1.lat) - (p2.lat-p1.lat)*(pt.lng-p1.lng); }
+  function inside(pt){ const c = cross(pt); return keepPositive ? c>=0 : c<=0; }
+  function intersect(a,b){
+    const c1=cross(a), c2=cross(b);
+    const t = c1/(c1-c2);
+    return {lat:a.lat+t*(b.lat-a.lat), lng:a.lng+t*(b.lng-a.lng)};
+  }
+  const out=[];
+  for(let i=0;i<ring.length;i++){
+    const curr = ring[i], next = ring[(i+1)%ring.length];
+    const currIn = inside(curr), nextIn = inside(next);
+    if(currIn) out.push(curr);
+    if(currIn !== nextIn) out.push(intersect(curr,next));
+  }
+  return out;
+}
+// Andrew's monotone chain convex hull. Points: [{lat,lng}]
+function convexHull(points){
+  const pts = points.slice().sort((a,b)=> a.lng-b.lng || a.lat-b.lat);
+  const cross = (o,a,b)=> (a.lng-o.lng)*(b.lat-o.lat) - (a.lat-o.lat)*(b.lng-o.lng);
+  const lower=[];
+  for(const p of pts){
+    while(lower.length>=2 && cross(lower[lower.length-2],lower[lower.length-1],p)<=0) lower.pop();
+    lower.push(p);
+  }
+  const upper=[];
+  for(let i=pts.length-1;i>=0;i--){
+    const p=pts[i];
+    while(upper.length>=2 && cross(upper[upper.length-2],upper[upper.length-1],p)<=0) upper.pop();
+    upper.push(p);
+  }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+function ringToLatLngs(coords){ return coords.slice(0,-1).map(c=>({lat:c[1], lng:c[0]})); }
+function latLngsToPolygonGeom(pts){
+  const coords = pts.map(p=>[p.lng,p.lat]);
+  coords.push(coords[0]);
+  return {type:"Polygon", coordinates:[coords]};
+}
 
 // ---------- Cancelamento centralizado de modos ----------
 function stopAllModes(){
@@ -316,6 +450,8 @@ function stopAllModes(){
   cancelMemberAreaMode();
   cancelHouseMarkMode();
   cancelHouseMoveMode();
+  cancelSplitZona();
+  cancelMergeMode();
   disableMoveMode();
   finishEditZonaVertices(true);
 }
@@ -393,9 +529,10 @@ finishZonaBtn.onclick = ()=>{
   const now = new Date().toISOString();
   const zona = {id:uuid(), igreja_id:null, poligono:geometry,
     status_evangelizacao:"nao_iniciado", observacoes:"", created_at:now, updated_at:now,
-    ultima_visita:null, casas:[]};
+    ultima_visita:null, casas:[], categoria:"evangelizacao", assigned_membro_ids:[], data_alvo:null};
   db.zonas.push(zona);
   cancelZonaDrawing();
+  logActivity('zona_criada', `Zona criada por ${deviceId}`);
   persist();
   const layer = findZonaLayer(zona.id);
   if(layer) selectZona(layer);
@@ -442,15 +579,103 @@ function cancelHouseMoveMode(){
   mapEl.classList.remove('mode-area');
 }
 
+// ---------- Modo: dividir zona ----------
+let splitZonaId = null;
+let splitPoints = [];
+let splitTempMarkers = [];
+let splitTempLine = null;
+function startSplitZona(zonaId){
+  stopAllModes();
+  splitZonaId = zonaId;
+  splitPoints = [];
+  mapEl.classList.add('mode-area');
+  setHint("Clique em 2 pontos para definir a linha de corte da zona.");
+}
+function cancelSplitZona(){
+  splitZonaId = null;
+  splitPoints = [];
+  splitTempMarkers.forEach(m=>map.removeLayer(m));
+  splitTempMarkers = [];
+  if(splitTempLine){ map.removeLayer(splitTempLine); splitTempLine=null; }
+  mapEl.classList.remove('mode-area');
+}
+function applySplitZona(){
+  const zona = db.zonas.find(z=>z.id===splitZonaId);
+  if(!zona || splitPoints.length<2) { cancelSplitZona(); return; }
+  const ring = ringToLatLngs(zona.poligono.coordinates[0]);
+  const [p1,p2] = splitPoints;
+  const partA = clipRingByLine(ring, p1, p2, true);
+  const partB = clipRingByLine(ring, p1, p2, false);
+  if(partA.length<3 || partB.length<3){
+    toast("A linha não corta a zona em duas partes válidas.");
+    cancelSplitZona();
+    return;
+  }
+  const now = new Date().toISOString();
+  const base = {igreja_id:zona.igreja_id, status_evangelizacao:zona.status_evangelizacao,
+    observacoes:zona.observacoes, custom_color:zona.custom_color, categoria:zona.categoria||"evangelizacao",
+    assigned_membro_ids:[], data_alvo:null, casas:[], ultima_visita:null, created_at:now, updated_at:now};
+  const zonaA = {...base, id:uuid(), poligono:latLngsToPolygonGeom(partA)};
+  const zonaB = {...base, id:uuid(), poligono:latLngsToPolygonGeom(partB)};
+  db.zonas = db.zonas.filter(z=>z.id!==zona.id);
+  db.zonas.push(zonaA, zonaB);
+  logActivity('zona_dividida', `Zona dividida em duas por ${deviceId}`);
+  cancelSplitZona();
+  deselectZona();
+  persist();
+  toast("Zona dividida em duas.","success");
+}
+
+// ---------- Modo: mesclar zonas ----------
+let mergeSourceZonaId = null;
+function startMergeZona(zonaId){
+  stopAllModes();
+  mergeSourceZonaId = zonaId;
+  setHint("Clique em outra zona no mapa para mesclar (o resultado é o casco convexo das duas).");
+}
+function cancelMergeMode(){ mergeSourceZonaId = null; }
+function applyMergeZona(targetZonaId){
+  const a = db.zonas.find(z=>z.id===mergeSourceZonaId);
+  const b = db.zonas.find(z=>z.id===targetZonaId);
+  if(!a || !b || a.id===b.id){ cancelMergeMode(); return; }
+  const pts = ringToLatLngs(a.poligono.coordinates[0]).concat(ringToLatLngs(b.poligono.coordinates[0]));
+  const hull = convexHull(pts);
+  if(hull.length<3){ toast("Não foi possível mesclar essas zonas."); cancelMergeMode(); return; }
+  const now = new Date().toISOString();
+  const novo = {id:uuid(), igreja_id:a.igreja_id, poligono:latLngsToPolygonGeom(hull),
+    status_evangelizacao:a.status_evangelizacao, observacoes:(a.observacoes||"")+" + "+(b.observacoes||""),
+    custom_color:a.custom_color, created_at:now, updated_at:now, ultima_visita:null,
+    casas:[...(a.casas||[]), ...(b.casas||[])], categoria:a.categoria||"evangelizacao",
+    assigned_membro_ids:Array.from(new Set([...(a.assigned_membro_ids||[]),...(b.assigned_membro_ids||[])])), data_alvo:null};
+  db.zonas = db.zonas.filter(z=>z.id!==a.id && z.id!==b.id);
+  db.zonas.push(novo);
+  logActivity('zona_mesclada', `Zonas mescladas por ${deviceId}`);
+  cancelMergeMode();
+  deselectZona();
+  persist();
+  toast("Zonas mescladas (casco convexo). Ajuste os vértices se necessário.","success");
+}
+
 map.on('mousemove', e=>{
   if(memberAreaTarget && memberAreaCenter){
     if(memberAreaTempCircle) map.removeLayer(memberAreaTempCircle);
     const r = map.distance(memberAreaCenter, e.latlng);
     memberAreaTempCircle = L.circle(memberAreaCenter,{radius:r,color:"#8e44ad",fillOpacity:0.15,dashArray:"4,4"}).addTo(map);
   }
+  if(splitZonaId && splitPoints.length===1){
+    if(splitTempLine) map.removeLayer(splitTempLine);
+    splitTempLine = L.polyline([splitPoints[0], e.latlng], {color:"#e74c3c", dashArray:"4,4", weight:3}).addTo(map);
+  }
 });
 
 map.on('click', e=>{
+  if(splitZonaId){
+    splitPoints.push(e.latlng);
+    const m = L.circleMarker(e.latlng,{radius:6,color:"#e74c3c",fillColor:"#fff",fillOpacity:1}).addTo(map);
+    splitTempMarkers.push(m);
+    if(splitPoints.length===2){ applySplitZona(); }
+    return;
+  }
   if(houseMoveTarget){
     const {zonaId, casaId} = houseMoveTarget;
     const zona = db.zonas.find(z=>z.id===zonaId);
@@ -533,8 +758,9 @@ function findZonaLayer(zonaId){
 }
 function styleForZona(zona, selected){
   const baseColor = zona.custom_color || STATUS_COLORS[zona.status_evangelizacao] || "#3388ff";
+  const catDash = CATEGORY_META[zona.categoria||'evangelizacao'].dash;
   return { color: baseColor, fillColor: baseColor, fillOpacity:0.4,
-    weight: selected ? 4 : 2, dashArray: selected ? "6,4" : null };
+    weight: selected ? 4 : 2, dashArray: selected ? "6,4" : catDash };
 }
 
 // ---------- Seleção de zona + controles (editar/mover) ----------
@@ -550,11 +776,17 @@ function renderZonaControls(zona){
   const dLat = 0.00035, dLng = 0.00045;
   const editIcon = L.divIcon({className:'', html:'<div class="zone-ctrl-btn" title="Editar vértices">✏️</div>', iconSize:[26,26], iconAnchor:[13,13]});
   const moveIcon = L.divIcon({className:'', html:'<div class="zone-ctrl-btn" title="Mover zona">✥</div>', iconSize:[26,26], iconAnchor:[13,13]});
+  const dupIcon = L.divIcon({className:'', html:'<div class="zone-ctrl-btn" title="Duplicar zona">⧉</div>', iconSize:[26,26], iconAnchor:[13,13]});
+  const splitIcon = L.divIcon({className:'', html:'<div class="zone-ctrl-btn" title="Dividir zona">✂</div>', iconSize:[26,26], iconAnchor:[13,13]});
   const editMarker = L.marker([c.lat+dLat, c.lng-dLng], {icon:editIcon}).addTo(map);
   editMarker.on('click', ()=> startEditZonaVertices(zona.id));
   const moveMarker = L.marker([c.lat+dLat, c.lng+dLng], {icon:moveIcon}).addTo(map);
   moveMarker.on('click', ()=> toggleMoveZona(zona.id));
-  zonaControlMarkers = [editMarker, moveMarker];
+  const dupMarker = L.marker([c.lat+dLat*2.2, c.lng-dLng*0.6], {icon:dupIcon}).addTo(map);
+  dupMarker.on('click', ()=> duplicateZona(zona.id));
+  const splitMarker = L.marker([c.lat+dLat*2.2, c.lng+dLng*0.6], {icon:splitIcon}).addTo(map);
+  splitMarker.on('click', ()=> startSplitZona(zona.id));
+  zonaControlMarkers = [editMarker, moveMarker, dupMarker, splitMarker];
 }
 
 function selectZona(layer){
@@ -566,12 +798,14 @@ function selectZona(layer){
   });
   const zona = db.zonas.find(z=>z.id===layer._zonaId);
   document.getElementById('zonaIgreja').value = zona.igreja_id || "";
+  document.getElementById('zonaCategoria').value = zona.categoria || "evangelizacao";
   document.getElementById('zonaStatus').value = zona.status_evangelizacao;
   document.getElementById('zonaObs').value = zona.observacoes;
   document.getElementById('zonaColor').value = zona.custom_color || STATUS_COLORS[zona.status_evangelizacao];
   document.getElementById('saveZonaBtn').disabled = false;
   document.getElementById('deleteZonaBtn').disabled = false;
   document.getElementById('zonaDetailsBtn').disabled = false;
+  document.getElementById('mergeZonaBtn').disabled = false;
   document.getElementById('zonaColorApplyBtn').disabled = false;
   document.getElementById('zonaColorClearBtn').disabled = false;
   const almas = db.membros.filter(m=>m.zona_id===zona.id).length;
@@ -588,11 +822,13 @@ function deselectZona(){
   selectedZonaLayer = null;
   setSelectionBar("");
   document.getElementById('zonaIgreja').value = "";
+  document.getElementById('zonaCategoria').value = "evangelizacao";
   document.getElementById('zonaStatus').value = "nao_iniciado";
   document.getElementById('zonaObs').value = "";
   document.getElementById('saveZonaBtn').disabled = true;
   document.getElementById('deleteZonaBtn').disabled = true;
   document.getElementById('zonaDetailsBtn').disabled = true;
+  document.getElementById('mergeZonaBtn').disabled = true;
   document.getElementById('zonaColorApplyBtn').disabled = true;
   document.getElementById('zonaColorClearBtn').disabled = true;
   document.getElementById('zonaBadge').style.display = 'none';
@@ -624,11 +860,35 @@ document.getElementById('saveZonaBtn').onclick = ()=>{
   if(!selectedZonaLayer) return;
   const zona = db.zonas.find(z=>z.id===selectedZonaLayer._zonaId);
   zona.igreja_id = document.getElementById('zonaIgreja').value || null;
+  zona.categoria = document.getElementById('zonaCategoria').value;
   zona.status_evangelizacao = document.getElementById('zonaStatus').value;
   zona.observacoes = document.getElementById('zonaObs').value;
   zona.updated_at = new Date().toISOString();
+  logActivity('zona_atualizada', `Zona atualizada por ${deviceId}`);
   persist();
   toast("Zona salva.","success");
+};
+function duplicateZona(id){
+  const src = db.zonas.find(z=>z.id===id);
+  if(!src) return;
+  const offset = 0.0004;
+  const coords = src.poligono.coordinates[0].map(c=>[c[0]+offset, c[1]+offset]);
+  const now = new Date().toISOString();
+  const novo = {id:uuid(), igreja_id:src.igreja_id, poligono:{type:"Polygon", coordinates:[coords]},
+    status_evangelizacao:src.status_evangelizacao, observacoes:src.observacoes||"",
+    custom_color:src.custom_color, created_at:now, updated_at:now, ultima_visita:null, casas:[],
+    categoria:src.categoria||"evangelizacao", assigned_membro_ids:[], data_alvo:null};
+  db.zonas.push(novo);
+  closeModal();
+  logActivity('zona_duplicada', `Zona duplicada por ${deviceId}`);
+  persist();
+  const layer = findZonaLayer(novo.id);
+  if(layer) selectZona(layer);
+  toast("Zona duplicada.","success");
+}
+window.duplicateZona = duplicateZona;
+document.getElementById('mergeZonaBtn').onclick = ()=>{
+  if(selectedZonaLayer) startMergeZona(selectedZonaLayer._zonaId);
 };
 document.getElementById('deleteZonaBtn').onclick = async ()=>{
   if(!selectedZonaLayer) return;
@@ -637,12 +897,26 @@ document.getElementById('deleteZonaBtn').onclick = async ()=>{
   db.zonas = db.zonas.filter(z=>z.id!==selectedZonaLayer._zonaId);
   db.membros.forEach(m=>{ if(m.zona_id===selectedZonaLayer._zonaId) m.zona_id=null; });
   selectedZonaLayer = null;
+  logActivity('zona_excluida', `Zona excluída por ${deviceId}`);
   persist();
   deselectZona();
   toast("Zona excluída.","danger");
 };
 
 // ---------- Editar vértices (arrastar / adicionar / remover pontos) ----------
+function snapToNearbyVertex(latlng, excludeZonaId, toleranceMeters){
+  toleranceMeters = toleranceMeters || 8;
+  let best = null, bestDist = Infinity;
+  db.zonas.forEach(z=>{
+    if(z.id===excludeZonaId || !z.poligono) return;
+    z.poligono.coordinates[0].slice(0,-1).forEach(c=>{
+      const cand = L.latLng(c[1], c[0]);
+      const d = map.distance(latlng, cand);
+      if(d<bestDist){ bestDist = d; best = cand; }
+    });
+  });
+  return (best && bestDist<=toleranceMeters) ? best : null;
+}
 let editingZona = null;
 let vertexMarkers = [];
 let midMarkers = [];
@@ -676,6 +950,9 @@ function rebuildEditHandles(layer){
       layer.setLatLngs(vertexMarkers.map(v=>v.getLatLng()));
     });
     vm.on('dragend', ()=>{
+      const snapped = snapToNearbyVertex(vm.getLatLng(), layer._zonaId);
+      if(snapped) vm.setLatLng(snapped);
+      layer.setLatLngs(vertexMarkers.map(v=>v.getLatLng()));
       saveVertexPositions(layer);
       rebuildEditHandles(layer);
     });
@@ -791,14 +1068,19 @@ document.getElementById('addMembroBtn').onclick = async ()=>{
   if(!igreja_id){ toast("Selecione uma igreja."); return; }
   const nome_ficticio = nomeFicticio();
   const hash_id = await hashId(nome_ficticio+Date.now()+Math.random());
-  db.membros.push({id:uuid(), igreja_id, zona_id:null, nome_ficticio, hash_id, created_at:new Date().toISOString()});
+  db.membros.push({id:uuid(), igreja_id, zona_id:null, nome_ficticio, hash_id, created_at:new Date().toISOString(),
+    contato:"", funcao:"", habilidades:"", descricao:"", tags:[], household_id:null});
+  logActivity('membro_criado', `Membro adicionado por ${deviceId}`);
   persist();
   toast("Membro adicionado.","success");
 };
 async function deleteMembro(id){
   const ok = await askConfirm("Excluir este membro?");
   if(!ok) return;
+  const m = db.membros.find(x=>x.id===id);
+  if(m && m.household_id) unlinkHousehold(m, false);
   db.membros = db.membros.filter(m=>m.id!==id);
+  logActivity('membro_excluido', `Membro excluído por ${deviceId}`);
   persist();
   toast("Membro excluído.","danger");
 }
@@ -825,6 +1107,55 @@ window.editIgreja = editIgreja;
 window.deleteIgreja = deleteIgreja;
 window.deleteMembro = deleteMembro;
 
+// ---------- Households ----------
+function unlinkHousehold(membro, doSave){
+  if(!membro.household_id) return;
+  const hh = db.households.find(h=>h.id===membro.household_id);
+  if(hh){
+    hh.membro_ids = hh.membro_ids.filter(id=>id!==membro.id);
+    if(hh.membro_ids.length===0) db.households = db.households.filter(h=>h.id!==hh.id);
+  }
+  membro.household_id = null;
+  if(doSave!==false) saveDB(db);
+}
+function linkMembroToHousehold(membro, householdId){
+  if(membro.household_id===householdId) return;
+  unlinkHousehold(membro, false);
+  const hh = db.households.find(h=>h.id===householdId);
+  if(hh){ hh.membro_ids.push(membro.id); membro.household_id = hh.id; }
+  saveDB(db);
+}
+async function createHouseholdForMembro(membro){
+  const nome = await askText("Nome da família/household:", "");
+  if(!nome) return;
+  const hh = {id:uuid(), nome, igreja_id:membro.igreja_id, membro_ids:[]};
+  db.households.push(hh);
+  linkMembroToHousehold(membro, hh.id);
+  logActivity('household_criado', `Household "${nome}" criado por ${deviceId}`);
+  persist();
+  openMemberModal(membro.id);
+}
+window.createHouseholdForMembro = createHouseholdForMembro;
+function changeMembroHousehold(membroId, householdId){
+  const m = db.membros.find(x=>x.id===membroId);
+  if(!m) return;
+  if(!householdId){ unlinkHousehold(m, true); }
+  else{ linkMembroToHousehold(m, householdId); }
+  persist();
+  openMemberModal(membroId);
+}
+window.changeMembroHousehold = changeMembroHousehold;
+async function deleteHousehold(id){
+  const ok = await askConfirm("Excluir este household? Os membros ficarão sem família vinculada.");
+  if(!ok) return;
+  db.membros.forEach(m=>{ if(m.household_id===id) m.household_id = null; });
+  db.households = db.households.filter(h=>h.id!==id);
+  logActivity('household_excluido', `Household excluído por ${deviceId}`);
+  persist();
+  toast("Household excluído.","danger");
+}
+window.deleteHousehold = deleteHousehold;
+
 // ---------- Modal de detalhes/edição do membro ----------
 function openMemberModal(id){
   const m = db.membros.find(x=>x.id===id);
@@ -835,6 +1166,11 @@ function openMemberModal(id){
   const igrejaOpts = db.igrejas.map(i=>`<option value="${i.id}" ${i.id===m.igreja_id?'selected':''}>${i.nome}</option>`).join('');
   const dtLocal = new Date(m.created_at);
   const dtValue = new Date(dtLocal.getTime() - dtLocal.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  const tags = m.tags || [];
+  const tagsHtml = tags.map(t=>`<span class="tag-chip">${t}<b onclick="removeTagFromMembro('${m.id}','${t.replace(/'/g,"\\'")}')">×</b></span>`).join('') || '<i style="font-size:11px;color:#888">Nenhuma tag</i>';
+  const householdsIgreja = db.households.filter(h=>h.igreja_id===m.igreja_id);
+  const hhOpts = '<option value="">-- sem household --</option>' +
+    householdsIgreja.map(h=>`<option value="${h.id}" ${h.id===m.household_id?'selected':''}>${h.nome} (${h.membro_ids.length})</option>`).join('');
   modalBox.innerHTML = `
     <h3>Detalhes do membro</h3>
     <label style="font-size:12px">Nome fictício:
@@ -847,6 +1183,34 @@ function openMemberModal(id){
     <label style="font-size:12px">Zona vinculada:
       <select id="mZona">${zonaOpts}</select>
     </label>
+    <label style="font-size:12px">Função na igreja:
+      <select id="mFuncao">
+        <option value="" ${!m.funcao?'selected':''}>-- sem função --</option>
+        <option value="Voluntário" ${m.funcao==='Voluntário'?'selected':''}>Voluntário</option>
+        <option value="Líder de campanha" ${m.funcao==='Líder de campanha'?'selected':''}>Líder de campanha</option>
+        <option value="Equipe de oração" ${m.funcao==='Equipe de oração'?'selected':''}>Equipe de oração</option>
+        <option value="Membro" ${m.funcao==='Membro'?'selected':''}>Membro</option>
+      </select>
+    </label>
+    <label style="font-size:12px">Contato:
+      <input id="mContato" type="text" value="${(m.contato||'').replace(/"/g,'&quot;')}" placeholder="telefone, e-mail...">
+    </label>
+    <label style="font-size:12px">Habilidades:
+      <input id="mHabilidades" type="text" value="${(m.habilidades||'').replace(/"/g,'&quot;')}" placeholder="ex: música, ensino...">
+    </label>
+    <label style="font-size:12px">Descrição:
+      <textarea id="mDescricao" placeholder="Notas detalhadas...">${m.descricao||''}</textarea>
+    </label>
+    <label style="font-size:12px">Tags:</label>
+    <div style="margin-bottom:4px">${tagsHtml}</div>
+    <div class="row2">
+      <input id="mNewTag" type="text" placeholder="nova tag...">
+      <button id="mAddTag" style="flex:0 0 auto;width:auto">+ Tag</button>
+    </div>
+    <label style="font-size:12px">Household/família:
+      <select id="mHousehold">${hhOpts}</select>
+    </label>
+    <button id="mNewHousehold">+ Novo household</button>
     <label style="font-size:12px">Data de cadastro:
       <input id="mData" type="datetime-local" value="${dtValue}">
     </label>
@@ -862,6 +1226,17 @@ function openMemberModal(id){
   document.getElementById('mIgreja').onchange = ()=>{
     m.igreja_id = document.getElementById('mIgreja').value;
     m.zona_id = null;
+    unlinkHousehold(m, false);
+    saveDB(db);
+    openMemberModal(id);
+  };
+  document.getElementById('mHousehold').onchange = e=> changeMembroHousehold(id, e.target.value);
+  document.getElementById('mNewHousehold').onclick = ()=> createHouseholdForMembro(m);
+  document.getElementById('mAddTag').onclick = ()=>{
+    const val = document.getElementById('mNewTag').value.trim();
+    if(!val) return;
+    if(!m.tags) m.tags = [];
+    if(!m.tags.includes(val)) m.tags.push(val);
     saveDB(db);
     openMemberModal(id);
   };
@@ -871,8 +1246,13 @@ function openMemberModal(id){
     m.nome_ficticio = nome;
     m.igreja_id = document.getElementById('mIgreja').value;
     m.zona_id = document.getElementById('mZona').value || null;
+    m.funcao = document.getElementById('mFuncao').value;
+    m.contato = document.getElementById('mContato').value.trim();
+    m.habilidades = document.getElementById('mHabilidades').value.trim();
+    m.descricao = document.getElementById('mDescricao').value;
     const dt = document.getElementById('mData').value;
     if(dt) m.created_at = new Date(dt).toISOString();
+    logActivity('membro_atualizado', `Membro atualizado por ${deviceId}`);
     persist();
     closeModal();
     toast("Membro atualizado.","success");
@@ -895,8 +1275,17 @@ function openMemberModal(id){
   }
 }
 window.openMemberModal = openMemberModal;
+function removeTagFromMembro(membroId, tag){
+  const m = db.membros.find(x=>x.id===membroId);
+  if(!m || !m.tags) return;
+  m.tags = m.tags.filter(t=>t!==tag);
+  saveDB(db);
+  openMemberModal(membroId);
+}
+window.removeTagFromMembro = removeTagFromMembro;
 
 // ---------- Modal de detalhes da igreja ----------
+let churchEditId = null;
 function openChurchModal(id){
   const ig = db.igrejas.find(i=>i.id===id);
   if(!ig) return;
@@ -906,9 +1295,16 @@ function openChurchModal(id){
     `<div class="member-row">${m.nome_ficticio} <code>${m.hash_id.slice(0,8)}</code>
      <button onclick="openMemberModal('${m.id}')">Detalhes</button></div>`
   ).join('') || '<i>Nenhum membro cadastrado</i>';
+  const dtLocal = new Date(ig.created_at);
+  const dtValue = new Date(dtLocal.getTime() - dtLocal.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  const headerHtml = churchEditId===id ?
+    `<label style="font-size:12px">Nome:<input id="chNome" type="text" value="${ig.nome.replace(/"/g,'&quot;')}"></label>
+     <label style="font-size:12px">Cadastrada em:<input id="chData" type="datetime-local" value="${dtValue}"></label>
+     <div class="row2"><button onclick="saveEditChurchInfo('${id}')">Salvar</button><button onclick="cancelEditChurchInfo()">Cancelar</button></div>` :
+    `<h3>${ig.nome} <button style="width:auto" onclick="startEditChurchInfo('${id}')">✎</button></h3>
+     <div><b>Cadastrada em:</b> ${new Date(ig.created_at).toLocaleString()}</div>`;
   modalBox.innerHTML = `
-    <h3>${ig.nome}</h3>
-    <div><b>Cadastrada em:</b> ${new Date(ig.created_at).toLocaleString()}</div>
+    ${headerHtml}
     <div><b>Zonas vinculadas:</b> ${zonas.length}</div>
     <label style="font-size:12px">Cor do ícone:
       <input type="color" id="chColor" value="${ig.color||'#5b3a29'}">
@@ -927,6 +1323,24 @@ function openChurchModal(id){
   };
 }
 window.openChurchModal = openChurchModal;
+function startEditChurchInfo(id){ churchEditId = id; openChurchModal(id); }
+window.startEditChurchInfo = startEditChurchInfo;
+function cancelEditChurchInfo(){ churchEditId = null; }
+window.cancelEditChurchInfo = cancelEditChurchInfo;
+function saveEditChurchInfo(id){
+  const ig = db.igrejas.find(i=>i.id===id);
+  if(!ig) return;
+  const nome = document.getElementById('chNome').value.trim();
+  if(!nome){ toast("Nome não pode ser vazio."); return; }
+  const dt = document.getElementById('chData').value;
+  ig.nome = nome;
+  if(dt) ig.created_at = new Date(dt).toISOString();
+  churchEditId = null;
+  persist();
+  openChurchModal(id);
+  toast("Igreja atualizada.","success");
+}
+window.saveEditChurchInfo = saveEditChurchInfo;
 
 // ---------- Modal de detalhes da zona ----------
 let casaEditId = null;
@@ -940,6 +1354,14 @@ function openZonaModal(id){
   const oracao = casas.filter(c=>c.recebeu_oracao).length;
   const igrejaOpts = '<option value="">-- sem igreja --</option>' +
     db.igrejas.map(i=>`<option value="${i.id}" ${i.id===zona.igreja_id?'selected':''}>${i.nome}</option>`).join('');
+  const catOpts = Object.entries(CATEGORY_META).map(([k,v])=>
+    `<option value="${k}" ${((zona.categoria||'evangelizacao')===k)?'selected':''}>${v.label}</option>`).join('');
+  const igrejaMembros = zona.igreja_id ? db.membros.filter(m=>m.igreja_id===zona.igreja_id) : [];
+  const assigned = new Set(zona.assigned_membro_ids||[]);
+  const assignHtml = igrejaMembros.length ? igrejaMembros.map(m=>
+    `<label style="display:flex;align-items:center;gap:4px;width:auto;font-weight:normal">
+      <input type="checkbox" ${assigned.has(m.id)?'checked':''} onchange="toggleZonaAssign('${zona.id}','${m.id}',this.checked)">${m.nome_ficticio}${m.funcao?' — '+m.funcao:''}
+    </label>`).join('') : '<i>Selecione uma igreja para atribuir membros</i>';
   const casasHtml = casas.map(c=>{
     if(casaConfirmId===c.id){
       return `<div style="border-bottom:1px solid #eee;padding:4px 0">
@@ -979,12 +1401,18 @@ function openZonaModal(id){
     <label style="font-size:12px">Igreja:
       <select id="mzIgreja">${igrejaOpts}</select>
     </label>
+    <label style="font-size:12px">Categoria:
+      <select id="mzCategoria">${catOpts}</select>
+    </label>
     <label style="font-size:12px">Status:
       <select id="mzStatus">
         <option value="nao_iniciado" ${zona.status_evangelizacao==='nao_iniciado'?'selected':''}>Não iniciado</option>
         <option value="em_andamento" ${zona.status_evangelizacao==='em_andamento'?'selected':''}>Em andamento</option>
         <option value="concluido" ${zona.status_evangelizacao==='concluido'?'selected':''}>Concluído</option>
       </select>
+    </label>
+    <label style="font-size:12px">Data alvo (campanhas/prazos):
+      <input id="mzDataAlvo" type="date" value="${zona.data_alvo ? zona.data_alvo.slice(0,10) : ''}">
     </label>
     <label style="font-size:12px">Observações:
       <textarea id="mzObs">${zona.observacoes||''}</textarea>
@@ -996,6 +1424,9 @@ function openZonaModal(id){
       <button id="mzSave">Salvar zona</button>
       <button id="mzClearColor">Cor padrão</button>
     </div>
+    <hr>
+    <h3>Membros atribuídos</h3>
+    <div style="max-height:140px;overflow:auto">${assignHtml}</div>
     <hr>
     <h3>Casas</h3>
     <div style="max-height:180px;overflow:auto">${casasHtml}</div>
@@ -1012,14 +1443,27 @@ function openZonaModal(id){
   document.getElementById('zClose').onclick = closeModal;
 }
 window.openZonaModal = openZonaModal;
+function toggleZonaAssign(zonaId, membroId, checked){
+  const zona = db.zonas.find(z=>z.id===zonaId);
+  if(!zona) return;
+  if(!zona.assigned_membro_ids) zona.assigned_membro_ids = [];
+  if(checked && !zona.assigned_membro_ids.includes(membroId)) zona.assigned_membro_ids.push(membroId);
+  if(!checked) zona.assigned_membro_ids = zona.assigned_membro_ids.filter(id=>id!==membroId);
+  saveDB(db);
+}
+window.toggleZonaAssign = toggleZonaAssign;
 function saveZonaModalEdit(id){
   const zona = db.zonas.find(z=>z.id===id);
   if(!zona) return;
   zona.igreja_id = document.getElementById('mzIgreja').value || null;
+  zona.categoria = document.getElementById('mzCategoria').value;
   zona.status_evangelizacao = document.getElementById('mzStatus').value;
   zona.observacoes = document.getElementById('mzObs').value;
   zona.custom_color = document.getElementById('mzColor').value;
+  const da = document.getElementById('mzDataAlvo').value;
+  zona.data_alvo = da ? new Date(da).toISOString() : null;
   zona.updated_at = new Date().toISOString();
+  logActivity('zona_atualizada', `Zona atualizada por ${deviceId}`);
   persist();
   toast("Zona atualizada.","success");
   openZonaModal(id);
@@ -1095,6 +1539,12 @@ function renderZonas(){
     layer.off('click');
     layer.on('click', ev=>{
       if(memberAreaTarget || houseMarkTarget || houseMoveTarget) return;
+      if(splitZonaId) return;
+      if(mergeSourceZonaId){
+        L.DomEvent.stopPropagation(ev);
+        applyMergeZona(zona.id);
+        return;
+      }
       L.DomEvent.stopPropagation(ev);
       if(selectedZonaLayer && selectedZonaLayer._zonaId===zona.id){ deselectZona(); }
       else{ selectZona(layer); }
@@ -1108,7 +1558,6 @@ function renderIgrejas(){
   db.igrejas.forEach(ig=>{
     const popupHtml = `<b>${ig.nome}</b><br>
       <button onclick="openChurchModal('${ig.id}')">Ver detalhes</button>
-      <button onclick="editIgreja('${ig.id}')">Editar nome</button>
       <button onclick="deleteIgreja('${ig.id}')">Excluir</button>`;
     const marker = L.marker([ig.lat, ig.lng], {draggable:true, icon:churchIcon(ig.color)}).addTo(igrejaLayer).bindPopup(popupHtml);
     marker.on('dragend', ()=>{
@@ -1125,12 +1574,50 @@ function renderMemberAreas(){
     L.circle([m.area.lat, m.area.lng], {radius:m.area.radius, color:"#8e44ad", fillOpacity:0.15}).addTo(memberAreaLayer);
   });
 }
+function memberPopupHtml(id){
+  const m = db.membros.find(x=>x.id===id);
+  if(!m) return '';
+  const ig = db.igrejas.find(i=>i.id===m.igreja_id);
+  const zona = db.zonas.find(z=>z.id===m.zona_id);
+  const tags = (m.tags||[]).map(t=>`<span class="tag-chip">${t}</span>`).join(' ');
+  return `<div style="font-size:12px;min-width:160px">
+    <b>${m.nome_ficticio}</b><br>
+    <code>${m.hash_id.slice(0,8)}</code><br>
+    Igreja: ${ig?ig.nome:'-'}<br>
+    ${m.funcao ? `Função: ${m.funcao}<br>` : ''}
+    Zona: ${zona ? (zona.observacoes||'Zona').slice(0,24) : 'sem zona'}<br>
+    ${tags ? `<div style="margin:2px 0">${tags}</div>` : ''}
+    <button onclick="openMemberModal('${m.id}')">Ver detalhes</button>
+  </div>`;
+}
+function householdPopupHtml(householdId){
+  const hh = db.households.find(h=>h.id===householdId);
+  if(!hh) return '';
+  const membros = db.membros.filter(m=>hh.membro_ids.includes(m.id));
+  const rows = membros.map(m=>`<div class="member-row">${m.nome_ficticio}<button onclick="openMemberModal('${m.id}')">Ver</button></div>`).join('');
+  return `<div style="font-size:12px;min-width:180px"><b>🏠 ${hh.nome}</b><br>${rows||'<i>Sem membros</i>'}</div>`;
+}
 function renderSouls(){
   soulsLayer.clearLayers();
+  const grouped = {};
   db.membros.forEach(m=>{
     if(!m.area) return;
-    const icon = L.divIcon({className:'', html:'<div class="soul-icon">🔥</div>', iconSize:[20,20], iconAnchor:[10,18]});
-    L.marker([m.area.lat, m.area.lng], {icon}).bindTooltip(m.nome_ficticio+" (alma)").addTo(soulsLayer);
+    if(m.household_id){
+      if(!grouped[m.household_id]) grouped[m.household_id] = [];
+      grouped[m.household_id].push(m);
+    } else {
+      const icon = L.divIcon({className:'', html:'<div class="soul-icon">🔥</div>', iconSize:[20,20], iconAnchor:[10,18]});
+      L.marker([m.area.lat, m.area.lng], {icon}).bindTooltip(m.nome_ficticio+" (alma)")
+        .bindPopup(memberPopupHtml(m.id)).addTo(soulsLayer);
+    }
+  });
+  Object.entries(grouped).forEach(([hhId, members])=>{
+    const lat = members.reduce((s,m)=>s+m.area.lat,0)/members.length;
+    const lng = members.reduce((s,m)=>s+m.area.lng,0)/members.length;
+    const hh = db.households.find(h=>h.id===hhId);
+    const icon = L.divIcon({className:'', html:`<div class="soul-icon" style="position:relative">🏠<span style="position:absolute;top:-6px;right:-8px;background:#e74c3c;color:#fff;border-radius:8px;font-size:9px;padding:0 4px">${members.length}</span></div>`, iconSize:[20,20], iconAnchor:[10,18]});
+    L.marker([lat,lng], {icon}).bindTooltip((hh?hh.nome:'Household')+` (${members.length})`)
+      .bindPopup(householdPopupHtml(hhId)).addTo(soulsLayer);
   });
 }
 let casaMarkers = {};
@@ -1209,20 +1696,45 @@ function renderAll(){
   else if(db.igrejas.length) membroIgrejaEl.value = db.igrejas[0].id;
   document.getElementById('noIgrejaHint').style.display = db.igrejas.length ? 'none' : 'block';
   renderMembers();
+  renderBell();
+  renderActivityLog();
 }
 function renderMembers(){
   const igreja_id = document.getElementById('membroIgreja').value;
   const query = (document.getElementById('memberSearch').value||'').toLowerCase().trim();
+  const sort = document.getElementById('memberSort').value;
+  const funcaoFilter = document.getElementById('memberFuncaoFilter').value;
+  const hhFilter = document.getElementById('memberHouseholdFilter').value;
   let list = db.membros.filter(m=>m.igreja_id===igreja_id);
-  if(query) list = list.filter(m=>m.nome_ficticio.toLowerCase().includes(query));
+  if(query) list = list.filter(m=> m.nome_ficticio.toLowerCase().includes(query) ||
+    (m.tags||[]).some(t=>t.toLowerCase().includes(query)));
+  if(funcaoFilter) list = list.filter(m=>m.funcao===funcaoFilter);
+  if(hhFilter==='com') list = list.filter(m=>m.household_id);
+  if(hhFilter==='sem') list = list.filter(m=>!m.household_id);
+  list = list.slice().sort((a,b)=>{
+    if(sort==='nome_asc') return a.nome_ficticio.localeCompare(b.nome_ficticio);
+    if(sort==='nome_desc') return b.nome_ficticio.localeCompare(a.nome_ficticio);
+    if(sort==='data_desc') return new Date(b.created_at)-new Date(a.created_at);
+    if(sort==='data_asc') return new Date(a.created_at)-new Date(b.created_at);
+    if(sort==='zona') return (b.zona_id?1:0)-(a.zona_id?1:0);
+    return 0;
+  });
   document.getElementById('members').innerHTML = list.map(m=>
-    `<div class="member-row">${m.nome_ficticio} <code>${m.hash_id.slice(0,8)}</code>
+    `<div class="member-row">${m.nome_ficticio}${m.household_id?' 🏠':''}${m.funcao?` <small style="color:#888">(${m.funcao})</small>`:''} <code>${m.hash_id.slice(0,8)}</code>
      <span><button onclick="openMemberModal('${m.id}')">Detalhes</button>
      <button onclick="deleteMembro('${m.id}')">x</button></span></div>`).join('') ||
-    `<div class="empty-hint">${query ? 'Nenhum membro encontrado.' : 'Nenhum membro cadastrado ainda.'}</div>`;
+    `<div class="empty-hint">${query||funcaoFilter||hhFilter ? 'Nenhum membro encontrado.' : 'Nenhum membro cadastrado ainda.'}</div>`;
+  const households = db.households.filter(h=>h.igreja_id===igreja_id);
+  document.getElementById('householdsList').innerHTML = households.map(h=>
+    `<div class="member-row">🏠 ${h.nome} <small>(${h.membro_ids.length} membros)</small>
+     <button onclick="deleteHousehold('${h.id}')">x</button></div>`).join('') ||
+    '<div class="empty-hint">Nenhum household cadastrado.</div>';
 }
 document.getElementById('membroIgreja').onchange = renderMembers;
 document.getElementById('memberSearch').oninput = renderMembers;
+document.getElementById('memberSort').onchange = renderMembers;
+document.getElementById('memberFuncaoFilter').onchange = renderMembers;
+document.getElementById('memberHouseholdFilter').onchange = renderMembers;
 document.getElementById('zonaSearch').oninput = renderZonas;
 document.getElementById('igrejaSelect').onchange = e=>{
   const ig = db.igrejas.find(i=>i.id===e.target.value);
@@ -1286,6 +1798,7 @@ function updateLastSyncLabel(cfg){
   if(el) el.textContent = formatRelativeTime(cfg.lastSync);
 }
 setInterval(()=>updateLastSyncLabel(loadGhConfig()), 30000);
+setInterval(()=>{ renderBell(); }, 300000);
 (function fillGhForm(){
   const cfg = loadGhConfig();
   document.getElementById('ghRepo').value = cfg.repo || '';
@@ -1379,20 +1892,128 @@ document.getElementById('ghPullBtn').onclick = pullFromGitHub;
 document.getElementById('panelToggle').onclick = ()=>{
   document.getElementById('panel').classList.toggle('collapsed');
 };
-document.getElementById('tabBtnAcoes').onclick = ()=>{
-  document.getElementById('tabAcoes').style.display = '';
-  document.getElementById('tabCloud').style.display = 'none';
-  document.getElementById('tabBtnAcoes').classList.add('active');
-  document.getElementById('tabBtnCloud').classList.remove('active');
+
+// ---------- Action Center: alerts ----------
+function computeAlerts(){
+  const alerts = [];
+  const now = Date.now();
+  const DAY = 86400000;
+  db.zonas.forEach(zona=>{
+    if(zona.status_evangelizacao!=='concluido'){
+      (zona.casas||[]).forEach(c=>{
+        const days = Math.floor((now - new Date(c.data_visita).getTime())/DAY);
+        if(days>=30){
+          alerts.push({id:'casa_'+c.id, msg:`Casa "${c.endereco}" sem contato há ${days}d`, zonaId:zona.id, casaId:c.id});
+        }
+      });
+    }
+    if(zona.status_evangelizacao==='em_andamento'){
+      const days = Math.floor((now - new Date(zona.updated_at).getTime())/DAY);
+      if(days>=14){
+        const ig = db.igrejas.find(i=>i.id===zona.igreja_id);
+        alerts.push({id:'zona_'+zona.id, msg:`Zona ${ig?'('+ig.nome+')':''} parada há ${days}d`, zonaId:zona.id});
+      }
+    }
+    if(zona.categoria==='campanha' && zona.data_alvo){
+      const days = Math.floor((new Date(zona.data_alvo).getTime() - now)/DAY);
+      if(days>=0 && days<=3){
+        alerts.push({id:'campanha_'+zona.id, msg:`Campanha "${(zona.observacoes||'zona').slice(0,20)}" começa em ${days}d`, zonaId:zona.id});
+      }
+    }
+  });
+  return alerts;
+}
+function renderBell(){
+  const alerts = computeAlerts();
+  const badge = document.getElementById('bellBadge');
+  badge.textContent = alerts.length;
+  badge.style.display = alerts.length ? 'block' : 'none';
+  const panel = document.getElementById('bellPanel');
+  panel.innerHTML = alerts.length
+    ? alerts.map(a=>`<div class="alert-item" onclick="goToAlert('${a.zonaId}',${a.casaId?`'${a.casaId}'`:null})">${a.msg}</div>`).join('')
+    : '<div class="alert-item">Nenhum alerta no momento.</div>';
+  maybeNotify(alerts);
+}
+function goToAlert(zonaId, casaId){
+  document.getElementById('bellPanel').style.display = 'none';
+  const zona = db.zonas.find(z=>z.id===zonaId);
+  if(!zona) return;
+  const c = polygonCentroid(zona.poligono);
+  map.setView([c.lat, c.lng], 17);
+  if(casaId){
+    const marker = casaMarkers[casaId];
+    if(marker) marker.openPopup();
+  } else {
+    openZonaModal(zonaId);
+  }
+}
+window.goToAlert = goToAlert;
+document.getElementById('bellBtn').onclick = ()=>{
+  const panel = document.getElementById('bellPanel');
+  const showing = panel.style.display==='block';
+  panel.style.display = showing ? 'none' : 'block';
+  if(!showing) renderBell();
 };
-document.getElementById('tabBtnCloud').onclick = ()=>{
-  document.getElementById('tabAcoes').style.display = 'none';
-  document.getElementById('tabCloud').style.display = '';
-  document.getElementById('tabBtnCloud').classList.add('active');
-  document.getElementById('tabBtnAcoes').classList.remove('active');
+document.addEventListener('click', e=>{
+  const panel = document.getElementById('bellPanel');
+  if(panel.style.display==='block' && !panel.contains(e.target) && e.target.id!=='bellBtn') panel.style.display='none';
+});
+
+// ---------- Notifications ----------
+const NOTIFIED_KEY = "evangelismo_notified_ids";
+function getNotifiedIds(){ return new Set(JSON.parse(localStorage.getItem(NOTIFIED_KEY)||'[]')); }
+function saveNotifiedIds(set){ localStorage.setItem(NOTIFIED_KEY, JSON.stringify([...set])); }
+function maybeNotify(alerts){
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const notified = getNotifiedIds();
+  const fresh = alerts.filter(a=>!notified.has(a.id));
+  if(!fresh.length) return;
+  new Notification("Mapa de Evangelização", {
+    body: fresh.length===1 ? fresh[0].msg : `${fresh.length} novos alertas pendentes.`
+  });
+  fresh.forEach(a=>notified.add(a.id));
+  saveNotifiedIds(notified);
+}
+function updateNotifStatus(){
+  const el = document.getElementById('notifStatus');
+  if(!('Notification' in window)){ el.textContent = 'Notificações não suportadas neste navegador.'; return; }
+  el.textContent = { granted:'Ativadas.', denied:'Bloqueadas nas configurações do navegador.', default:'Não ativadas.' }[Notification.permission];
+}
+document.getElementById('notifPermBtn').onclick = async ()=>{
+  if(!('Notification' in window)){ toast("Notificações não suportadas neste navegador."); return; }
+  const perm = await Notification.requestPermission();
+  updateNotifStatus();
+  if(perm==='granted') toast("Notificações ativadas.","success");
 };
+updateNotifStatus();
+
+// ---------- Activity log ----------
+function renderActivityLog(){
+  const el = document.getElementById('activityLog');
+  if(!el) return;
+  el.innerHTML = db.activity_log.slice(0,100).map(a=>
+    `<div style="border-bottom:1px solid #f0f0f0;padding:3px 0">
+      <b>${formatRelativeTime(a.ts)}</b> — ${a.device}<br>${a.descricao}
+    </div>`).join('') || '<div class="empty-hint">Nenhuma atividade registrada ainda.</div>';
+}
+
+function showTab(name){
+  document.getElementById('tabAcoes').style.display = name==='acoes' ? '' : 'none';
+  document.getElementById('tabMembros').style.display = name==='membros' ? '' : 'none';
+  document.getElementById('tabCloud').style.display = name==='cloud' ? '' : 'none';
+  document.getElementById('tabBtnAcoes').classList.toggle('active', name==='acoes');
+  document.getElementById('tabBtnMembros').classList.toggle('active', name==='membros');
+  document.getElementById('tabBtnCloud').classList.toggle('active', name==='cloud');
+}
+document.getElementById('tabBtnAcoes').onclick = ()=> showTab('acoes');
+document.getElementById('tabBtnMembros').onclick = ()=> showTab('membros');
+document.getElementById('tabBtnCloud').onclick = ()=> showTab('cloud');
 
 renderAll();
+if(window.innerWidth <= 700){
+  document.getElementById('legendBody').classList.add('collapsed');
+  document.getElementById('legendToggleIcon').textContent = '▸';
+}
 </script>
 </body>
 </html>
